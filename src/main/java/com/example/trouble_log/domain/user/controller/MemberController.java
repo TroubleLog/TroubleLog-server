@@ -2,8 +2,10 @@ package com.example.trouble_log.domain.user.controller;
 
 import com.example.trouble_log.domain.user.dto.LoginRequest;
 import com.example.trouble_log.domain.user.dto.LoginResponse;
+import com.example.trouble_log.domain.user.dto.SignUpRequest;
 import com.example.trouble_log.domain.user.service.MemberService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -27,5 +29,11 @@ public class MemberController {
     public ResponseEntity<Void> logout() {
         memberService.logout();
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/signup")
+    public ResponseEntity<LoginResponse> signup(@RequestBody SignUpRequest request) {
+        LoginResponse response = memberService.signup(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 }

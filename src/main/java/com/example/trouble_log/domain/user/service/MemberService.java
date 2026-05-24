@@ -2,6 +2,7 @@ package com.example.trouble_log.domain.user.service;
 
 import com.example.trouble_log.domain.user.dto.LoginRequest;
 import com.example.trouble_log.domain.user.dto.LoginResponse;
+import com.example.trouble_log.domain.user.dto.SignUpRequest;
 import com.example.trouble_log.domain.user.entity.Member;
 import com.example.trouble_log.domain.user.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
@@ -42,5 +43,34 @@ public class MemberService {
     }
 
     public void logout() {
+    }
+
+    @Transactional
+    public LoginResponse signup(SignUpRequest request) {
+        validateSignUpRequest(request);
+
+        // 이미 존재하는 이메일일 경우
+        if (memberRepository.existsByEmail(request.getEmail())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 사용 중인 이메일입니다.");
+        }
+
+        Member member = new Member(
+                request.getEmail(),
+                request.getPassword(),
+                request.getUsername()
+        );
+
+        Member savedMember = memberRepository.save(member);
+
+        return new LoginResponse(savedMember.getId(), savedMember.getEmail(), savedMember.getUsername());
+    }
+
+    private void validateSignUpRequest(SignUpRequest request) {
+        if (request == null
+                || isBlank(request.getEmail())
+                || isBlank(request.getPassword())
+                || isBlank(request.getUsername())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "이메일, 패스워드, 이름은 필수입니다.");
+        }
     }
 }
