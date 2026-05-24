@@ -24,6 +24,9 @@ public class PreContext {
     @Column(columnDefinition = "TEXT", nullable = false)
     private String techRationale;
 
+    @Column(columnDefinition = "TEXT", nullable = false)
+    private String exceptionHandling;
+
     @Column(length = 100, nullable = false)
     private String projectScale;
 }

@@ -22,6 +22,9 @@ public class InterviewQuestion {
     @Column(columnDefinition = "TEXT", nullable = false)
     private String question;
 
+    @Column(nullable = false)
+    private Integer questionSequence;
+
     @OneToOne(mappedBy = "interviewQuestion", cascade = CascadeType.ALL, orphanRemoval = true)
     private InterviewAnswer interviewAnswer;
 

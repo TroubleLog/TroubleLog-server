@@ -35,7 +35,7 @@ public class AnalysisResult {
     private Integer scoreCommunication;
 
     @Column(nullable = false)
-    private Integer scoreArchitectureThought;
+    private Integer scoreArchitecture;
 
     // --- 트러블 슈팅 리포트 영역 ---
     @Column(columnDefinition = "TEXT", nullable = false)
