@@ -28,4 +28,10 @@ public class Member {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    public Member(String email, String password, String username) {
+        this.email = email;
+        this.password = password;
+        this.username = username;
+        this.createdAt = LocalDateTime.now();
+    }
 }
