@@ -43,7 +43,7 @@ dependencies {
 
 dependencyManagement {
 	imports {
-		//mavenBom "org.springframework.ai:spring-ai-bom:${springAiVersion}"
+		mavenBom "org.springframework.ai:spring-ai-bom:${springAiVersion}"
 		mavenBom "com.azure.spring:spring-cloud-azure-dependencies:${springCloudAzureVersion}"
 	}
 }
