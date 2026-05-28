@@ -18,7 +18,9 @@ jobs:
           distribution: 'temurin'
 
       - name: Build with Gradle
-        run: ./gradlew bootJar
+        run: |
+          chmod +x ./gradlew
+          ./gradlew bootJar
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
