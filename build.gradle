@@ -9,8 +9,12 @@ version = '0.0.1-SNAPSHOT'
 
 java {
 	toolchain {
-		languageVersion = JavaLanguageVersion.of(25)
+		languageVersion = JavaLanguageVersion.of(21)
 	}
+}
+
+springBoot {
+	mainClass = 'com.example.trouble_log.TroubleLogApplication'
 }
 
 repositories {
@@ -50,4 +54,12 @@ dependencyManagement {
 
 tasks.named('test') {
 	useJUnitPlatform()
+}
+
+tasks.register('aiCli', org.springframework.boot.gradle.tasks.run.BootRun) {
+	group = 'application'
+	description = 'Run a one-off Azure OpenAI prompt from the command line.'
+	mainClass = 'com.example.trouble_log.AiCliApplication'
+	classpath = sourceSets.main.runtimeClasspath
+	args '--spring.profiles.active=ai-cli'
 }
