@@ -1,4 +1,4 @@
-package com.example.trouble_log.domain.projectsession.entity;
+package com.example.trouble_log.domain.projectSession.entity;
 
 import com.example.trouble_log.domain.user.entity.Member;
 import jakarta.persistence.*;
@@ -34,4 +34,10 @@ public class ProjectSession {
     @OneToOne(mappedBy = "projectSession", cascade = CascadeType.ALL, orphanRemoval = true)
     private PreContext preContext;
 
+    public ProjectSession(Member member, String codeContent, String githubUrl) {
+        this.member = member;
+        this.codeContent = codeContent;
+        this.githubUrl = githubUrl;
+        this.createdAt = LocalDateTime.now();
+    }
 }

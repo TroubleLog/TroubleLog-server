@@ -1,4 +1,4 @@
-package com.example.trouble_log.domain.projectsession.entity;
+package com.example.trouble_log.domain.projectSession.entity;
 
 import jakarta.persistence.*;
 import lombok.Getter;

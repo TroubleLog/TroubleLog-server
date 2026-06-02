@@ -1,6 +1,6 @@
 package com.example.trouble_log.domain.interview.entity;
 
-import com.example.trouble_log.domain.projectsession.entity.ProjectSession;
+import com.example.trouble_log.domain.projectSession.entity.ProjectSession;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
