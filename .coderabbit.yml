@@ -1,0 +1,7 @@
+language: ko  # 리뷰 언어 (한국어도 됨)
+reviews:
+  profile: "chill"  # "chill"(부드럽게) vs "assertive"(엄격하게)
+  auto_review:
+    enabled: true
+    drafts: false  # 드래프트 PR은 리뷰 안 함
+  request_changes_workflow: true  # 이슈 있으면 changes request
