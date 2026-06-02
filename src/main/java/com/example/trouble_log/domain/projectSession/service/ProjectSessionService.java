@@ -1,5 +1,9 @@
 package com.example.trouble_log.domain.projectSession.service;
 
+import com.example.trouble_log.domain.ai.service.AzureOpenAiPromptService;
+import com.example.trouble_log.domain.interview.dto.InterviewQuestionResponse;
+import com.example.trouble_log.domain.interview.entity.InterviewQuestion;
+import com.example.trouble_log.domain.interview.repository.InterviewQuestionRepository;
 import com.example.trouble_log.domain.projectSession.dto.PreContextRequest;
 import com.example.trouble_log.domain.projectSession.dto.PreContextResponse;
 import com.example.trouble_log.domain.projectSession.dto.ProjectSessionRequest;
@@ -10,6 +14,8 @@ import com.example.trouble_log.domain.projectSession.repository.PreContextReposi
 import com.example.trouble_log.domain.projectSession.repository.ProjectSessionRepository;
 import com.example.trouble_log.domain.user.entity.Member;
 import com.example.trouble_log.domain.user.repository.MemberRepository;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -24,6 +30,8 @@ public class ProjectSessionService {
     private final MemberRepository memberRepository;
     private final ProjectSessionRepository projectSessionRepository;
     private final PreContextRepository preContextRepository;
+    private final InterviewQuestionRepository interviewQuestionRepository;
+    private final AzureOpenAiPromptService azureOpenAiPromptService;
 
     @Transactional
     public ProjectSessionResponse create(ProjectSessionRequest request) {
@@ -77,7 +85,26 @@ public class ProjectSessionService {
 
         PreContext savedPreContext = preContextRepository.save(preContext);
 
-        return new PreContextResponse(savedPreContext.getId());
+        List<String> generatedQuestions = azureOpenAiPromptService.generateInterviewQuestions(
+                projectSession,
+                savedPreContext
+        );
+        List<InterviewQuestion> interviewQuestions = saveInterviewQuestions(projectSession, generatedQuestions);
+        List<InterviewQuestionResponse> questionResponses = interviewQuestions.stream()
+                .map(InterviewQuestionResponse::from)
+                .toList();
+
+        return new PreContextResponse(savedPreContext.getId(), questionResponses);
+    }
+
+    private List<InterviewQuestion> saveInterviewQuestions(ProjectSession projectSession, List<String> questions) {
+        List<InterviewQuestion> interviewQuestions = new ArrayList<>();
+
+        for (int index = 0; index < questions.size(); index++) {
+            interviewQuestions.add(new InterviewQuestion(projectSession, questions.get(index), index + 1));
+        }
+
+        return interviewQuestionRepository.saveAll(interviewQuestions);
     }
 
     private void validateRequestBody(Object request) {

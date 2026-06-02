@@ -44,9 +44,39 @@ public class AzureOpenAiPromptService {
     public List<String> generateInterviewQuestions(ProjectSession projectSession, PreContext preContext) {
         validateInterviewQuestionSource(projectSession, preContext);
 
+        return generateInterviewQuestions(
+                projectSession.getCodeContent(),
+                preContext.getCodePurpose(),
+                preContext.getTechRationale(),
+                preContext.getExceptionHandling(),
+                preContext.getProjectScale()
+        );
+    }
+
+    public List<String> generateInterviewQuestions(
+            String codeContent,
+            String codePurpose,
+            String techRationale,
+            String exceptionHandling,
+            String projectScale
+    ) {
+        validateInterviewQuestionSource(
+                codeContent,
+                codePurpose,
+                techRationale,
+                exceptionHandling,
+                projectScale
+        );
+
         String response = generate(
                 loadPromptTemplate(INTERVIEW_QUESTION_SYSTEM_PROMPT_PATH),
-                buildInterviewQuestionPrompt(projectSession, preContext)
+                buildInterviewQuestionPrompt(
+                        codeContent,
+                        codePurpose,
+                        techRationale,
+                        exceptionHandling,
+                        projectScale
+                )
         );
 
         return parseQuestionResponse(response);
@@ -66,13 +96,35 @@ public class AzureOpenAiPromptService {
         }
     }
 
-    private String buildInterviewQuestionPrompt(ProjectSession projectSession, PreContext preContext) {
+    private void validateInterviewQuestionSource(
+            String codeContent,
+            String codePurpose,
+            String techRationale,
+            String exceptionHandling,
+            String projectScale
+    ) {
+        if (isBlank(codeContent)
+                || isBlank(codePurpose)
+                || isBlank(techRationale)
+                || isBlank(exceptionHandling)
+                || isBlank(projectScale)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "질문 생성에 필요한 입력값이 비어 있습니다.");
+        }
+    }
+
+    private String buildInterviewQuestionPrompt(
+            String codeContent,
+            String codePurpose,
+            String techRationale,
+            String exceptionHandling,
+            String projectScale
+    ) {
         return loadPromptTemplate(INTERVIEW_QUESTION_USER_PROMPT_PATH)
-                .replace("{codeContent}", projectSession.getCodeContent())
-                .replace("{codePurpose}", preContext.getCodePurpose())
-                .replace("{techRationale}", preContext.getTechRationale())
-                .replace("{exceptionHandling}", preContext.getExceptionHandling())
-                .replace("{projectScale}", preContext.getProjectScale());
+                .replace("{codeContent}", codeContent)
+                .replace("{codePurpose}", codePurpose)
+                .replace("{techRationale}", techRationale)
+                .replace("{exceptionHandling}", exceptionHandling)
+                .replace("{projectScale}", projectScale);
     }
 
     private String loadPromptTemplate(String path) {

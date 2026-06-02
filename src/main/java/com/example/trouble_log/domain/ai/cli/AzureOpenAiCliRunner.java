@@ -2,6 +2,7 @@ package com.example.trouble_log.domain.ai.cli;
 
 import com.example.trouble_log.domain.ai.service.AzureOpenAiPromptService;
 import java.util.Arrays;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
@@ -21,6 +22,24 @@ public class AzureOpenAiCliRunner implements CommandLineRunner {
     @Value("${app.ai-cli.user-prompt:}")
     private String userPrompt;
 
+    @Value("${app.ai-cli.mode:raw}")
+    private String mode;
+
+    @Value("${app.ai-cli.code-content:}")
+    private String codeContent;
+
+    @Value("${app.ai-cli.code-purpose:}")
+    private String codePurpose;
+
+    @Value("${app.ai-cli.tech-rationale:}")
+    private String techRationale;
+
+    @Value("${app.ai-cli.exception-handling:}")
+    private String exceptionHandling;
+
+    @Value("${app.ai-cli.project-scale:}")
+    private String projectScale;
+
     @Value("${spring.ai.azure.openai.endpoint:}")
     private String endpoint;
 
@@ -36,6 +55,11 @@ public class AzureOpenAiCliRunner implements CommandLineRunner {
             return;
         }
 
+        if ("interview-question".equals(mode)) {
+            runInterviewQuestionPromptTest();
+            return;
+        }
+
         String prompt = resolvePrompt(args);
 
         if (isBlank(prompt)) {
@@ -45,6 +69,18 @@ public class AzureOpenAiCliRunner implements CommandLineRunner {
 
         String content = azureOpenAiPromptService.generate(systemPrompt, prompt);
         System.out.println(content);
+    }
+
+    private void runInterviewQuestionPromptTest() {
+        List<String> questions = azureOpenAiPromptService.generateInterviewQuestions(
+                codeContent,
+                codePurpose,
+                techRationale,
+                exceptionHandling,
+                projectScale
+        );
+
+        questions.forEach(System.out::println);
     }
 
     private boolean hasRequiredAzureOpenAiConfig() {

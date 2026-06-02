@@ -97,6 +97,63 @@ public class Main { ... }
 로그인 API를 구현하기 위한 코드입니다.
 ```
 
+## 소스코드는 어떻게 주입되나요?
+
+실제 서비스 흐름에서는 프론트가 보낸 소스코드가 먼저 DB에 저장됩니다.
+
+```text
+프론트에서 소스코드 입력
+-> POST /api/projects
+-> ProjectSession.codeContent에 저장
+-> POST /api/projects/{sessionId}/pre-context
+-> 백엔드가 ProjectSession.codeContent를 조회
+-> interview-question-user.txt의 {codeContent} 자리에 주입
+-> Azure OpenAI에 전달
+```
+
+백엔드 코드에서는 아래 치환 로직을 통해 소스코드를 넣습니다.
+
+```java
+.replace("{codeContent}", codeContent)
+```
+
+즉 프롬프트 파일에 있는:
+
+```text
+소스코드:
+{codeContent}
+```
+
+부분은 실행 시점에 실제 소스코드로 바뀝니다.
+
+```text
+소스코드:
+public class LoginService { ... }
+```
+
+CLI 테스트에서는 DB를 사용하지 않기 때문에 `application-ai-cli.properties`에 들어 있는 기본 샘플 코드가 사용됩니다. 현재 기본 샘플은 로그인 검증 코드입니다.
+
+```text
+public class LoginService {
+  public boolean login(String email, String password) {
+    if (email == null || password == null) {
+      throw new IllegalArgumentException("required");
+    }
+    return "test@example.com".equals(email) && "1234".equals(password);
+  }
+}
+```
+
+그래서 CLI 기본 테스트에서 아래와 같은 질문이 나오면 정상입니다.
+
+```text
+이메일과 비밀번호를 하드코딩한 이유
+IllegalArgumentException을 사용한 이유
+Spring Security로 바꾼다면 어떤 구조가 좋을지
+```
+
+이 질문들은 실제 프로젝트 전체 코드가 아니라, CLI 테스트용 기본 샘플 코드를 기반으로 생성된 것입니다.
+
 ## 현재 AI 호출 흐름
 
 현재 질문 생성 요청은 아래 서비스에서 처리합니다.
@@ -178,7 +235,57 @@ JSON 배열만 반환
 
 ## 로컬 테스트 방법
 
-### 1. Azure 연결 확인용 CLI 테스트
+### 1. txt 프롬프트 파일만 따로 테스트하기
+
+DB, Postman, Swagger 없이 프롬프트 파일만 Azure OpenAI에 보내서 확인할 수 있습니다.
+
+이 방식은 아래 파일을 실제로 읽습니다.
+
+```text
+src/main/resources/prompts/interview-question-system.txt
+src/main/resources/prompts/interview-question-user.txt
+```
+
+먼저 Azure 환경변수를 설정합니다.
+
+```bash
+export AZURE_OPENAI_ENDPOINT="https://<your-resource-name>.openai.azure.com/"
+export AZURE_OPENAI_API_KEY="<your-api-key>"
+export AZURE_OPENAI_DEPLOYMENT_NAME="<your-deployment-name>"
+export AZURE_OPENAI_MODEL="gpt-4o"
+```
+
+실행:
+
+```bash
+AZURE_OPENAI_TEST_MODE=interview-question ./gradlew aiCli
+```
+
+기본 샘플 값으로 `{codeContent}`, `{codePurpose}` 같은 플레이스홀더가 채워지고, Azure 응답 질문 3개가 터미널에 출력됩니다.
+
+주의:
+
+```text
+이 기본 샘플은 실제 사용자가 제출한 코드가 아닙니다.
+DB 없이 프롬프트 파일만 빠르게 검증하기 위한 테스트 데이터입니다.
+```
+
+샘플 값을 바꾸고 싶으면 환경변수로 덮어쓸 수 있습니다.
+
+```bash
+export AZURE_OPENAI_TEST_MODE=interview-question
+export AZURE_OPENAI_TEST_CODE_CONTENT='public class Main { public static void main(String[] args) { System.out.println("Hello"); } }'
+export AZURE_OPENAI_TEST_CODE_PURPOSE="Java main 메서드 실행 흐름을 확인하는 코드입니다."
+export AZURE_OPENAI_TEST_TECH_RATIONALE="가장 단순한 Java 실행 예제로 동작을 확인하기 위해 작성했습니다."
+export AZURE_OPENAI_TEST_EXCEPTION_HANDLING="현재 예외 처리는 없고, 입력값이 생기면 null 검증을 추가할 예정입니다."
+export AZURE_OPENAI_TEST_PROJECT_SCALE="개인 학습용 작은 예제입니다."
+
+./gradlew aiCli
+```
+
+이 테스트는 DB 저장을 하지 않습니다. 순수하게 프롬프트 파일과 Azure 응답 형식만 확인하는 용도입니다.
+
+### 2. Azure 연결 확인용 일반 CLI 테스트
 
 가장 빠른 테스트 방법입니다. Azure OpenAI 연결이 되는지, 프롬프트를 넣었을 때 응답이 오는지 확인할 수 있습니다.
 
@@ -207,11 +314,11 @@ export AZURE_OPENAI_TEST_PROMPT="로그인 API 코드 리뷰 면접 질문 3개�
 주의:
 
 ```text
-현재 aiCli는 txt 프롬프트 파일을 자동으로 읽어서 플레이스홀더를 치환하는 테스트가 아닙니다.
+일반 CLI 테스트는 txt 프롬프트 파일을 자동으로 읽어서 플레이스홀더를 치환하는 테스트가 아닙니다.
 간단한 Azure 연결 확인과 프롬프트 초안 실험용입니다.
 ```
 
-### 2. 실제 서비스 흐름 테스트
+### 3. 실제 서비스 흐름 테스트
 
 txt 파일에 있는 프롬프트가 실제 DB 값과 함께 잘 동작하는지 보려면 API 흐름으로 테스트해야 합니다.
 
@@ -236,10 +343,10 @@ txt 파일에 있는 프롬프트가 실제 DB 값과 함께 잘 동작하는지
 프롬프트 txt 파일 분리 완료
 Azure 질문 생성 메서드 구현 완료
 pre-context 저장 API 구현 완료
-InterviewQuestion 저장 및 질문 목록 반환 연결은 다음 단계에서 구현 예정
+InterviewQuestion 저장 및 질문 목록 반환 연결 완료
 ```
 
-따라서 지금 당장 가능한 테스트는 CLI 테스트이고, 실제 템플릿 치환까지 포함한 완전한 테스트는 `InterviewQuestion 저장` 단계가 연결된 뒤 Swagger 또는 Postman으로 확인하면 됩니다.
+따라서 txt 프롬프트 파일이 실제 DB 값과 함께 적용되는지 확인하려면 Swagger 또는 Postman에서 `POST /api/projects/{sessionId}/pre-context`를 호출하면 됩니다.
 
 ## 프롬프트 수정 시 주의사항
 
