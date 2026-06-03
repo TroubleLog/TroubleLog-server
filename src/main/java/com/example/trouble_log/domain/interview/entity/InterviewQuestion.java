@@ -1,6 +1,6 @@
 package com.example.trouble_log.domain.interview.entity;
 
-import com.example.trouble_log.domain.projectsession.entity.ProjectSession;
+import com.example.trouble_log.domain.projectSession.entity.ProjectSession;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -28,4 +28,9 @@ public class InterviewQuestion {
     @OneToOne(mappedBy = "interviewQuestion", cascade = CascadeType.ALL, orphanRemoval = true)
     private InterviewAnswer interviewAnswer;
 
+    public InterviewQuestion(ProjectSession projectSession, String question, Integer questionSequence) {
+        this.projectSession = projectSession;
+        this.question = question;
+        this.questionSequence = questionSequence;
+    }
 }

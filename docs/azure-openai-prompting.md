@@ -1,240 +1,376 @@
 # Azure OpenAI 프롬프팅 테스트 가이드
 
-이 문서는 TroubleLog 서버 안에서 Azure OpenAI 연결과 프롬프트 테스트를 담당하는 팀원을 위한 안내입니다.
+이 문서는 TroubleLog에서 프롬프트를 작성하고 테스트하는 담당자를 위한 안내입니다.
 
-현재 단계에서는 API 컨트롤러를 열지 않고, Spring 환경에서 Azure OpenAI 호출이 되는지만 CLI로 확인합니다. 나중에 프롬프트와 출력 형식이 확정되면 같은 서비스 코드를 도메인 기능에 연결하면 됩니다.
+현재 백엔드는 Azure OpenAI 호출 코드를 가지고 있고, 면접 질문 생성용 프롬프트는 Java 코드가 아니라 `txt` 파일로 분리되어 있습니다. 프롬프트 담당자는 Java 코드를 직접 수정하지 않고, 아래 프롬프트 파일만 수정하면 됩니다.
 
-## 전체 구조
+## 담당 범위
+
+프롬프트 담당자가 주로 수정하는 파일:
 
 ```text
-src/main/java/com/example/trouble_log/
-  AiCliApplication.java
-  domain/ai/
-    cli/AzureOpenAiCliRunner.java
-    service/AzureOpenAiPromptService.java
-  global/config/AiConfig.java
-
-src/main/resources/
-  application.properties
-  application-ai-cli.properties
+src/main/resources/prompts/interview-question-system.txt
+src/main/resources/prompts/interview-question-user.txt
 ```
 
-## 파일별 역할
+백엔드 담당자가 주로 관리하는 파일:
 
-### `build.gradle`
-
-Azure OpenAI 호출을 위해 Spring AI Azure OpenAI starter를 사용합니다.
-
-```gradle
-implementation 'org.springframework.ai:spring-ai-starter-model-azure-openai'
+```text
+src/main/java/com/example/trouble_log/domain/ai/service/AzureOpenAiPromptService.java
+src/main/java/com/example/trouble_log/domain/projectSession/service/ProjectSessionService.java
 ```
 
-또한 `aiCli`라는 Gradle task가 정의되어 있습니다. 이 task는 일반 서버를 띄우지 않고 AI CLI 전용 앱만 실행합니다.
+역할을 나누면 다음과 같습니다.
 
-```bash
-./gradlew aiCli
+```text
+프롬프트 담당자
+-> system prompt 문구 수정
+-> user prompt 템플릿 수정
+-> 응답 형식 규칙 수정
+-> 질문 품질 개선
+
+백엔드 담당자
+-> DB에서 ProjectSession, PreContext 조회
+-> 프롬프트 파일 읽기
+-> 플레이스홀더에 실제 값 넣기
+-> Azure OpenAI 호출
+-> 응답 파싱
+-> InterviewQuestion 저장
 ```
 
-### `src/main/java/com/example/trouble_log/AiCliApplication.java`
+## 프롬프트 파일 설명
 
-AI CLI 전용 Spring Boot entry point입니다.
+### `interview-question-system.txt`
 
-일반 서버 앱인 `TroubleLogApplication`과 분리되어 있습니다. CLI 테스트 때 회원, 프로젝트, DB, JPA 같은 일반 백엔드 Bean이 같이 뜨지 않도록 AI 관련 패키지만 스캔합니다.
+모델의 역할을 정의하는 파일입니다.
 
-### `src/main/java/com/example/trouble_log/global/config/AiConfig.java`
+예:
 
-Spring AI의 `ChatClient` Bean을 생성합니다.
-
-다른 서비스에서 Azure OpenAI를 호출하고 싶으면 이 `ChatClient`를 직접 쓰기보다, 우선 `AzureOpenAiPromptService`를 통해 호출하는 것을 권장합니다.
-
-### `src/main/java/com/example/trouble_log/domain/ai/service/AzureOpenAiPromptService.java`
-
-실제 Azure OpenAI 호출을 담당하는 서비스입니다.
-
-입력:
-
-- `systemPrompt`: 모델의 역할과 응답 규칙
-- `userPrompt`: 실제 질문 또는 분석 요청
-
-출력:
-
-- 모델 응답 텍스트
-
-나중에 백엔드 기능으로 이식할 때는 컨트롤러에서 바로 AI를 호출하지 말고, `AnalysisService`, `InterviewQuestionService` 같은 도메인 서비스에서 이 서비스를 호출하는 방식이 좋습니다.
-
-### `src/main/java/com/example/trouble_log/domain/ai/cli/AzureOpenAiCliRunner.java`
-
-CLI 테스트용 실행 코드입니다.
-
-프롬프트 입력 우선순위는 다음과 같습니다.
-
-1. 실행 인자로 전달한 값
-2. `AZURE_OPENAI_TEST_PROMPT` 환경변수
-
-일반적으로는 `AZURE_OPENAI_TEST_PROMPT` 환경변수에 테스트할 질문을 넣고 `./gradlew aiCli`를 실행하면 됩니다.
-
-### `src/main/resources/application.properties`
-
-일반 서버 실행 시 사용하는 공통 설정입니다.
-
-Azure OpenAI 설정도 여기에 있습니다. 실제 키와 엔드포인트는 파일에 직접 쓰지 말고 환경변수로 넣어야 합니다.
-
-```properties
-spring.ai.azure.openai.endpoint=${AZURE_OPENAI_ENDPOINT:https://example.openai.azure.com/}
-spring.ai.azure.openai.api-key=${AZURE_OPENAI_API_KEY:local-placeholder}
-spring.ai.azure.openai.chat.options.deployment-name=${AZURE_OPENAI_DEPLOYMENT_NAME:gpt-4o}
-spring.ai.azure.openai.chat.options.model=${AZURE_OPENAI_MODEL:gpt-4o}
-spring.ai.azure.openai.chat.options.temperature=${AZURE_OPENAI_TEMPERATURE:0.2}
+```text
+당신은 개발자의 트러블슈팅 경험을 검증하는 기술 면접관입니다.
+사용자가 제출한 소스코드와 사전 컨텍스트를 바탕으로 구체적인 면접 질문을 생성하세요.
 ```
 
-주의: `AZURE_OPENAI_API_KEY` 값은 절대 커밋하지 마세요.
+이 파일에는 보통 다음 내용을 적습니다.
 
-### `src/main/resources/application-ai-cli.properties`
-
-`ai-cli` 프로필에서만 쓰는 설정입니다.
-
-CLI 실행에서는 웹 서버와 DB/JPA가 필요 없으므로 꺼둡니다.
-
-```properties
-spring.main.web-application-type=none
-spring.autoconfigure.exclude=...
+```text
+모델의 역할
+응답 태도
+답변 언어
+전문성 수준
+절대 지켜야 하는 상위 규칙
 ```
 
-또한 CLI 테스트용 프롬프트 환경변수를 읽습니다.
+### `interview-question-user.txt`
 
-```properties
-app.ai-cli.system-prompt=${AZURE_OPENAI_SYSTEM_PROMPT:You are a concise prompt testing assistant for TroubleLog.}
-app.ai-cli.user-prompt=${AZURE_OPENAI_TEST_PROMPT:}
+실제 요청 템플릿입니다. 이 파일에는 백엔드가 DB에서 가져온 값이 들어갈 자리가 있습니다.
+
+현재 사용하는 플레이스홀더:
+
+```text
+{codeContent}
+{codePurpose}
+{techRationale}
+{exceptionHandling}
+{projectScale}
 ```
 
-## 최초 설정
+이 이름들은 백엔드 코드에서 찾아서 실제 값으로 바꾸는 값입니다. 따라서 프롬프트 문장은 자유롭게 수정해도 되지만, 플레이스홀더 이름은 그대로 유지해야 합니다.
 
-Java 21을 사용합니다.
+예:
 
-```bash
-java -version
+```text
+소스코드:
+{codeContent}
+
+코드 목적:
+{codePurpose}
 ```
 
-`21` 계열이 보이면 됩니다.
+실행 시 백엔드는 위 내용을 다음처럼 바꿔서 Azure OpenAI에 보냅니다.
 
-Azure OpenAI 환경변수를 설정합니다.
+```text
+소스코드:
+public class Main { ... }
+
+코드 목적:
+로그인 API를 구현하기 위한 코드입니다.
+```
+
+## 소스코드는 어떻게 주입되나요?
+
+실제 서비스 흐름에서는 프론트가 보낸 소스코드가 먼저 DB에 저장됩니다.
+
+```text
+프론트에서 소스코드 입력
+-> POST /api/projects
+-> ProjectSession.codeContent에 저장
+-> POST /api/projects/{sessionId}/pre-context
+-> 백엔드가 ProjectSession.codeContent를 조회
+-> interview-question-user.txt의 {codeContent} 자리에 주입
+-> Azure OpenAI에 전달
+```
+
+백엔드 코드에서는 아래 치환 로직을 통해 소스코드를 넣습니다.
+
+```java
+.replace("{codeContent}", codeContent)
+```
+
+즉 프롬프트 파일에 있는:
+
+```text
+소스코드:
+{codeContent}
+```
+
+부분은 실행 시점에 실제 소스코드로 바뀝니다.
+
+```text
+소스코드:
+public class LoginService { ... }
+```
+
+CLI 테스트에서는 DB를 사용하지 않기 때문에 `application-ai-cli.properties`에 들어 있는 기본 샘플 코드가 사용됩니다. 현재 기본 샘플은 로그인 검증 코드입니다.
+
+```text
+public class LoginService {
+  public boolean login(String email, String password) {
+    if (email == null || password == null) {
+      throw new IllegalArgumentException("required");
+    }
+    return "test@example.com".equals(email) && "1234".equals(password);
+  }
+}
+```
+
+그래서 CLI 기본 테스트에서 아래와 같은 질문이 나오면 정상입니다.
+
+```text
+이메일과 비밀번호를 하드코딩한 이유
+IllegalArgumentException을 사용한 이유
+Spring Security로 바꾼다면 어떤 구조가 좋을지
+```
+
+이 질문들은 실제 프로젝트 전체 코드가 아니라, CLI 테스트용 기본 샘플 코드를 기반으로 생성된 것입니다.
+
+## 현재 AI 호출 흐름
+
+현재 질문 생성 요청은 아래 서비스에서 처리합니다.
+
+```text
+AzureOpenAiPromptService.generateInterviewQuestions(projectSession, preContext)
+```
+
+내부 흐름:
+
+```text
+1. ProjectSession, PreContext 값 검증
+2. prompts/interview-question-system.txt 읽기
+3. prompts/interview-question-user.txt 읽기
+4. user prompt 안의 플레이스홀더를 실제 DB 값으로 치환
+5. Azure OpenAI에 system prompt + user prompt 전달
+6. 응답을 JSON 배열로 파싱
+7. 질문 3개를 List<String>으로 반환
+```
+
+AI에게 실제 요청이 나가는 코드는 다음 위치에 있습니다.
+
+```text
+src/main/java/com/example/trouble_log/domain/ai/service/AzureOpenAiPromptService.java
+```
+
+```java
+return requestSpec
+        .user(userPrompt)
+        .call()
+        .content();
+```
+
+여기서 `.call()`이 실제 Azure OpenAI 요청 지점입니다.
+
+## 응답 형식 규칙
+
+현재 백엔드는 Azure 응답을 JSON 배열로 파싱합니다. 따라서 프롬프트는 모델이 반드시 아래 형식으로 답하게 유도해야 합니다.
+
+```json
+[
+  "질문 1",
+  "질문 2",
+  "질문 3"
+]
+```
+
+중요 규칙:
+
+```text
+질문은 정확히 3개
+JSON 배열만 반환
+마크다운 코드블록 금지
+설명 문장 금지
+배열 요소는 문자열
+```
+
+좋은 응답:
+
+```json
+[
+  "Spring Boot와 JPA를 선택한 이유를 현재 코드 구조와 연결해서 설명해 주세요.",
+  "로그인 실패 상황에서 어떤 예외 처리를 추가하면 좋을지 설명해 주세요.",
+  "현재 서비스 계층에서 트랜잭션을 사용한 이유와 개선할 점을 설명해 주세요."
+]
+```
+
+나쁜 응답:
+
+```text
+아래는 질문 3개입니다.
+
+[
+  ...
+]
+```
+
+위처럼 설명 문장이나 마크다운 코드블록이 섞이면 백엔드 파싱이 실패할 수 있습니다.
+
+## 로컬 테스트 방법
+
+### 1. txt 프롬프트 파일만 따로 테스트하기
+
+DB, Postman, Swagger 없이 프롬프트 파일만 Azure OpenAI에 보내서 확인할 수 있습니다.
+
+이 방식은 아래 파일을 실제로 읽습니다.
+
+```text
+src/main/resources/prompts/interview-question-system.txt
+src/main/resources/prompts/interview-question-user.txt
+```
+
+먼저 Azure 환경변수를 설정합니다.
 
 ```bash
 export AZURE_OPENAI_ENDPOINT="https://<your-resource-name>.openai.azure.com/"
 export AZURE_OPENAI_API_KEY="<your-api-key>"
-export AZURE_OPENAI_DEPLOYMENT_NAME="<your-gpt-4o-deployment-name>"
+export AZURE_OPENAI_DEPLOYMENT_NAME="<your-deployment-name>"
 export AZURE_OPENAI_MODEL="gpt-4o"
 ```
 
-`AZURE_OPENAI_DEPLOYMENT_NAME`은 모델 이름이 아니라 Azure Portal에서 만든 deployment 이름입니다. deployment 이름을 `gpt-4o`로 만들었다면 `gpt-4o`를 넣으면 됩니다.
-
-## 실행 방법
-
-### 환경변수로 질문 실행하기
+실행:
 
 ```bash
-export AZURE_OPENAI_TEST_PROMPT="TroubleLog에서 장애 원인 분석 기능을 어떻게 설계하면 좋을까?"
+AZURE_OPENAI_TEST_MODE=interview-question ./gradlew aiCli
+```
+
+기본 샘플 값으로 `{codeContent}`, `{codePurpose}` 같은 플레이스홀더가 채워지고, Azure 응답 질문 3개가 터미널에 출력됩니다.
+
+주의:
+
+```text
+이 기본 샘플은 실제 사용자가 제출한 코드가 아닙니다.
+DB 없이 프롬프트 파일만 빠르게 검증하기 위한 테스트 데이터입니다.
+```
+
+샘플 값을 바꾸고 싶으면 환경변수로 덮어쓸 수 있습니다.
+
+```bash
+export AZURE_OPENAI_TEST_MODE=interview-question
+export AZURE_OPENAI_TEST_CODE_CONTENT='public class Main { public static void main(String[] args) { System.out.println("Hello"); } }'
+export AZURE_OPENAI_TEST_CODE_PURPOSE="Java main 메서드 실행 흐름을 확인하는 코드입니다."
+export AZURE_OPENAI_TEST_TECH_RATIONALE="가장 단순한 Java 실행 예제로 동작을 확인하기 위해 작성했습니다."
+export AZURE_OPENAI_TEST_EXCEPTION_HANDLING="현재 예외 처리는 없고, 입력값이 생기면 null 검증을 추가할 예정입니다."
+export AZURE_OPENAI_TEST_PROJECT_SCALE="개인 학습용 작은 예제입니다."
+
 ./gradlew aiCli
 ```
 
-### 한 번만 실행할 질문을 환경변수로 넣기
+이 테스트는 DB 저장을 하지 않습니다. 순수하게 프롬프트 파일과 Azure 응답 형식만 확인하는 용도입니다.
+
+### 2. Azure 연결 확인용 일반 CLI 테스트
+
+가장 빠른 테스트 방법입니다. Azure OpenAI 연결이 되는지, 프롬프트를 넣었을 때 응답이 오는지 확인할 수 있습니다.
+
+먼저 환경변수를 설정합니다.
 
 ```bash
-AZURE_OPENAI_TEST_PROMPT="로그 내용을 요약하고 원인 후보를 3개 뽑아줘." ./gradlew aiCli
+export AZURE_OPENAI_ENDPOINT="https://<your-resource-name>.openai.azure.com/"
+export AZURE_OPENAI_API_KEY="<your-api-key>"
+export AZURE_OPENAI_DEPLOYMENT_NAME="<your-deployment-name>"
+export AZURE_OPENAI_MODEL="gpt-4o"
 ```
 
-### system prompt 바꿔보기
+실행:
 
 ```bash
-export AZURE_OPENAI_SYSTEM_PROMPT="너는 장애 기록을 분석하는 백엔드 어시스턴트야. 답변은 한국어로, bullet 3개 이내로 해줘."
+./gradlew aiCli --args="소스코드와 사전 컨텍스트를 바탕으로 질문 3개 만들어줘"
+```
+
+또는 환경변수로 질문을 넣을 수 있습니다.
+
+```bash
+export AZURE_OPENAI_TEST_PROMPT="로그인 API 코드 리뷰 면접 질문 3개를 JSON 배열로 만들어줘."
 ./gradlew aiCli
 ```
 
-## 프롬프팅 테스트 예시
-
-### 장애 로그 요약
-
-System prompt:
+주의:
 
 ```text
-너는 장애 기록을 구조화하는 백엔드 어시스턴트야. 답변은 한국어로 해줘.
+일반 CLI 테스트는 txt 프롬프트 파일을 자동으로 읽어서 플레이스홀더를 치환하는 테스트가 아닙니다.
+간단한 Azure 연결 확인과 프롬프트 초안 실험용입니다.
 ```
 
-User prompt:
+### 3. 실제 서비스 흐름 테스트
+
+txt 파일에 있는 프롬프트가 실제 DB 값과 함께 잘 동작하는지 보려면 API 흐름으로 테스트해야 합니다.
+
+예상 흐름:
 
 ```text
-다음 상황을 요약하고 원인 후보 3개와 추가 질문 3개를 제안해줘.
+1. 서버 실행
+2. POST /api/projects 호출
+   -> 소스코드 저장
+   -> sessionId 반환
 
-상황:
-배포 후 로그인 API에서 500 에러가 발생했다.
-로컬에서는 정상 동작했다.
-서버 로그에는 DB connection refused가 찍혔다.
+3. POST /api/projects/{sessionId}/pre-context 호출
+   -> 사전 컨텍스트 저장
+   -> Azure 질문 생성 요청
+   -> InterviewQuestion 저장
+   -> 질문 목록 반환
 ```
 
-### 인터뷰 질문 생성
-
-System prompt:
+현재 구현 상태:
 
 ```text
-너는 개발자의 트러블슈팅 경험을 인터뷰 질문으로 바꾸는 도우미야.
+프롬프트 txt 파일 분리 완료
+Azure 질문 생성 메서드 구현 완료
+pre-context 저장 API 구현 완료
+InterviewQuestion 저장 및 질문 목록 반환 연결 완료
 ```
 
-User prompt:
+따라서 txt 프롬프트 파일이 실제 DB 값과 함께 적용되는지 확인하려면 Swagger 또는 Postman에서 `POST /api/projects/{sessionId}/pre-context`를 호출하면 됩니다.
+
+## 프롬프트 수정 시 주의사항
+
+플레이스홀더 이름은 바꾸지 마세요.
 
 ```text
-사용자가 겪은 문제:
-Spring Boot 배포 후 MySQL 연결 실패.
-
-이 경험을 더 자세히 기록하기 위한 후속 질문 5개를 만들어줘.
+{codeContent}
+{codePurpose}
+{techRationale}
+{exceptionHandling}
+{projectScale}
 ```
 
-### JSON 출력 실험
+응답 형식은 JSON 배열을 유지해야 합니다.
 
-System prompt:
-
-```text
-너는 장애 분석 결과를 JSON으로만 반환하는 도우미야. 설명 문장 없이 JSON만 출력해.
+```json
+["질문 1", "질문 2", "질문 3"]
 ```
 
-User prompt:
+질문 개수는 3개를 유지해야 합니다. 현재 백엔드는 질문이 3개가 아니면 잘못된 응답으로 처리합니다.
 
-```text
-다음 장애 상황을 분석해줘.
-
-상황: 배포 후 로그인 API 500 에러. 로그에는 DB connection refused.
-
-반환 형식:
-{
-  "summary": "...",
-  "rootCauseCandidates": ["...", "...", "..."],
-  "followUpQuestions": ["...", "...", "..."]
-}
-```
-
-## 테스트 체크리스트
-
-CLI 테스트 전에 확인할 것:
-
-- Java 버전이 21인지 확인
-- `AZURE_OPENAI_ENDPOINT`가 Azure OpenAI endpoint인지 확인
-- `AZURE_OPENAI_API_KEY`가 환경변수로 설정되어 있는지 확인
-- `AZURE_OPENAI_DEPLOYMENT_NAME`이 Azure Portal의 deployment 이름과 같은지 확인
-- API key를 `application.properties`에 직접 적지 않았는지 확인
-
-연결이 정상이라면 `./gradlew aiCli` 실행 후 모델 응답이 터미널에 출력됩니다.
+API key는 절대 코드나 문서에 적지 말고 환경변수로만 관리합니다.
 
 ## 자주 나는 오류
-
-### `UnsupportedClassVersionError`
-
-컴파일한 Java 버전과 실행 Java 버전이 다를 때 발생합니다.
-
-이 프로젝트는 Java 21로 통일했습니다. 아래 명령으로 확인하세요.
-
-```bash
-java -version
-./gradlew clean test
-```
 
 ### `401 Unauthorized`
 
@@ -242,32 +378,26 @@ API key가 잘못되었거나 endpoint와 key가 서로 다른 Azure OpenAI 리�
 
 ### `404 Not Found`
 
-대부분 deployment 이름이 잘못된 경우입니다. `AZURE_OPENAI_DEPLOYMENT_NAME`은 Azure Portal의 deployment 이름이어야 합니다.
+대부분 deployment 이름이 잘못된 경우입니다. `AZURE_OPENAI_DEPLOYMENT_NAME`은 모델 이름이 아니라 Azure에서 만든 deployment 이름입니다.
 
-### 응답이 영어로 나옴
+### 응답이 JSON으로 안 나옴
 
-system prompt에 한국어 응답 규칙을 넣습니다.
+`interview-question-user.txt`에서 응답 규칙을 더 강하게 적어야 합니다.
 
-```bash
-export AZURE_OPENAI_SYSTEM_PROMPT="답변은 항상 한국어로 해줘."
-```
-
-## 나중에 백엔드 기능으로 연결할 때
-
-프롬프트와 출력 형식이 확정되면 CLI가 아니라 도메인 서비스에서 `AzureOpenAiPromptService`를 호출하면 됩니다.
-
-예상 흐름:
+예:
 
 ```text
-Controller
-  -> AnalysisService
-      -> AzureOpenAiPromptService
-      -> AnalysisResult 저장
+반드시 JSON 배열만 반환해.
+설명 문장, 번호 목록, 마크다운 코드블록을 절대 포함하지 마.
 ```
 
-이때 권장하는 방식:
+### 질문이 너무 일반적임
 
-- 컨트롤러에서 직접 AI 호출하지 않기
-- 프롬프트 문자열은 가능하면 `src/main/resources/prompts/` 아래 파일로 분리하기
-- 모델 응답이 DB에 저장될 값이라면 JSON 스키마를 먼저 정하기
-- timeout, retry, 예외 처리 정책을 도메인 서비스에서 관리하기
+소스코드와 사전 컨텍스트를 근거로 질문하라는 규칙을 강화합니다.
+
+예:
+
+```text
+질문은 반드시 제출된 소스코드의 구조, 예외 처리, 기술 선택 이유 중 하나와 연결해서 작성해.
+일반적인 CS 질문은 만들지 마.
+```

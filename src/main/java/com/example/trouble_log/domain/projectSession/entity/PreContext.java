@@ -1,4 +1,4 @@
-package com.example.trouble_log.domain.projectsession.entity;
+package com.example.trouble_log.domain.projectSession.entity;
 
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -29,4 +29,18 @@ public class PreContext {
 
     @Column(length = 100, nullable = false)
     private String projectScale;
+
+    public PreContext(
+            ProjectSession projectSession,
+            String codePurpose,
+            String techRationale,
+            String exceptionHandling,
+            String projectScale
+    ) {
+        this.projectSession = projectSession;
+        this.codePurpose = codePurpose;
+        this.techRationale = techRationale;
+        this.exceptionHandling = exceptionHandling;
+        this.projectScale = projectScale;
+    }
 }
