@@ -177,6 +177,15 @@ public class AzureOpenAiPromptService {
         return value == null || value.isBlank();
     }
 
+    private void validateScore(String field, int score, int min, int max) {
+        if (score < min || score > max) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    String.format("AI 응답의 %s 점수가 허용 범위(%d~%d)를 벗어났습니다: %d", field, min, max, score)
+            );
+        }
+    }
+
     public AnswerFeedbackResult evaluateAnswer(String question, String answer) {
         if (isBlank(question) || isBlank(answer)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "질문과 답변은 필수입니다.");
@@ -197,7 +206,17 @@ public class AzureOpenAiPromptService {
     private AnswerFeedbackResult parseAnswerFeedbackResponse(String response) {
         String json = extractJsonObject(response);
         try {
-            return objectMapper.readValue(json, AnswerFeedbackResult.class);
+            AnswerFeedbackResult result = objectMapper.readValue(json, AnswerFeedbackResult.class);
+
+            if (result.getScores() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "답변 피드백 scores 필드가 없습니다.");
+            }
+            validateScore("specificity", result.getScores().getSpecificity(), 1, 5);
+            validateScore("structure",   result.getScores().getStructure(),   1, 5);
+            validateScore("relevance",   result.getScores().getRelevance(),   1, 5);
+            validateScore("keyword",     result.getScores().getKeyword(),     1, 5);
+
+            return result;
         } catch (JsonProcessingException e) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "답변 피드백 응답을 해석하지 못했습니다.", e);
         }
@@ -224,7 +243,22 @@ public class AzureOpenAiPromptService {
     private CodeEvaluationResult parseCodeEvaluationResponse(String response) {
         String json = extractJsonObject(response);
         try {
-            return objectMapper.readValue(json, CodeEvaluationResult.class);
+            CodeEvaluationResult result = objectMapper.readValue(json, CodeEvaluationResult.class);
+
+            if (result.getNaming() == null
+                    || result.getSingleResponsibility() == null
+                    || result.getErrorHandling() == null
+                    || result.getDuplication() == null
+                    || result.getCommentQuality() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "코드 평가 응답에 누락된 축이 있습니다.");
+            }
+            validateScore("naming",               result.getNaming().getScore(),               0, 20);
+            validateScore("singleResponsibility", result.getSingleResponsibility().getScore(), 0, 20);
+            validateScore("errorHandling",        result.getErrorHandling().getScore(),        0, 20);
+            validateScore("duplication",          result.getDuplication().getScore(),          0, 20);
+            validateScore("commentQuality",       result.getCommentQuality().getScore(),       0, 20);
+
+            return result;
         } catch (JsonProcessingException e) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "코드 평가 응답을 해석하지 못했습니다.", e);
         }
