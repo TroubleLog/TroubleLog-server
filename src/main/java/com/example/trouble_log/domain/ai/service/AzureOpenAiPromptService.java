@@ -14,6 +14,8 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import com.example.trouble_log.domain.ai.dto.AnswerFeedbackResult;
+import com.example.trouble_log.domain.ai.dto.CodeEvaluationResult;
 
 @Service
 @RequiredArgsConstructor
@@ -24,6 +26,10 @@ public class AzureOpenAiPromptService {
 
     private static final String INTERVIEW_QUESTION_SYSTEM_PROMPT_PATH = "prompts/interview-question-system.txt";
     private static final String INTERVIEW_QUESTION_USER_PROMPT_PATH = "prompts/interview-question-user.txt";
+    private static final String ANSWER_FEEDBACK_SYSTEM_PROMPT_PATH = "prompts/answer-feedback-system.txt";
+    private static final String ANSWER_FEEDBACK_USER_PROMPT_PATH   = "prompts/answer-feedback-user.txt";
+    private static final String CODE_EVALUATION_SYSTEM_PROMPT_PATH = "prompts/code-evaluation-system.txt";
+    private static final String CODE_EVALUATION_USER_PROMPT_PATH   = "prompts/code-evaluation-user.txt";
 
     public String generate(String systemPrompt, String userPrompt) {
         if (isBlank(userPrompt)) {
@@ -169,5 +175,74 @@ public class AzureOpenAiPromptService {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    public AnswerFeedbackResult evaluateAnswer(String question, String answer) {
+        if (isBlank(question) || isBlank(answer)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "질문과 답변은 필수입니다.");
+        }
+
+        String userPrompt = loadPromptTemplate(ANSWER_FEEDBACK_USER_PROMPT_PATH)
+                .replace("{question}", question)
+                .replace("{answer}", answer);
+
+        String response = generate(
+                loadPromptTemplate(ANSWER_FEEDBACK_SYSTEM_PROMPT_PATH),
+                userPrompt
+        );
+
+        return parseAnswerFeedbackResponse(response);
+    }
+
+    private AnswerFeedbackResult parseAnswerFeedbackResponse(String response) {
+        String json = extractJsonObject(response);
+        try {
+            return objectMapper.readValue(json, AnswerFeedbackResult.class);
+        } catch (JsonProcessingException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "답변 피드백 응답을 해석하지 못했습니다.", e);
+        }
+    }
+
+    // 답변 피드백
+    public CodeEvaluationResult evaluateCode(String codeContent) {
+        if (isBlank(codeContent)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "코드는 필수입니다.");
+        }
+
+        String userPrompt = loadPromptTemplate(CODE_EVALUATION_USER_PROMPT_PATH)
+                .replace("{codeContent}", codeContent);
+
+        String response = generate(
+                loadPromptTemplate(CODE_EVALUATION_SYSTEM_PROMPT_PATH),
+                userPrompt
+        );
+
+        return parseCodeEvaluationResponse(response);
+    }
+
+    // 코드 정량 평가
+    private CodeEvaluationResult parseCodeEvaluationResponse(String response) {
+        String json = extractJsonObject(response);
+        try {
+            return objectMapper.readValue(json, CodeEvaluationResult.class);
+        } catch (JsonProcessingException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "코드 평가 응답을 해석하지 못했습니다.", e);
+        }
+    }
+
+    //JSON 객체 추출 헬퍼
+    private String extractJsonObject(String response) {
+        if (isBlank(response)) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Azure OpenAI 응답이 비어 있습니다.");
+        }
+
+        int startIndex = response.indexOf('{');
+        int endIndex = response.lastIndexOf('}');
+
+        if (startIndex < 0 || endIndex < startIndex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Azure OpenAI 응답에 JSON 객체가 없습니다.");
+        }
+
+        return response.substring(startIndex, endIndex + 1);
     }
 }
