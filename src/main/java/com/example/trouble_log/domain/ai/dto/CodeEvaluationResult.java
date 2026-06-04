@@ -7,15 +7,18 @@ import lombok.Data;
 public class CodeEvaluationResult {
     @JsonProperty("naming")
     private Axis naming;
-    @JsonProperty("single_responsibility")
+
+    @JsonProperty("single_responsibility")   // 이미 있음, 유지
     private Axis singleResponsibility;
-    @JsonProperty("error_handling")
+
+    @JsonProperty("error_handling")          // snake_case로 수정
     private Axis errorHandling;
+
     @JsonProperty("duplication")
     private Axis duplication;
-    @JsonProperty("comment_quality")
+
+    @JsonProperty("comment_quality")         // snake_case로 수정
     private Axis commentQuality;
-    private int total;
 
     @Data
     public static class Axis {
