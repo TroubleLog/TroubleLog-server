@@ -7,7 +7,8 @@ import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,13 +20,17 @@ public class AuditLogQueryService {
 
     private final AuditLogRepository auditLogRepository;
 
-    public List<AuditLogResponse> findAuditLogs(String action, String status, Long memberId, Long sessionId) {
+    public Page<AuditLogResponse> findAuditLogs(
+            String action,
+            String status,
+            Long memberId,
+            Long sessionId,
+            Pageable pageable
+    ) {
         Specification<AuditLog> specification = buildSpecification(action, status, memberId, sessionId);
-        Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
 
-        return auditLogRepository.findAll(specification, sort).stream()
-                .map(AuditLogResponse::from)
-                .toList();
+        return auditLogRepository.findAll(specification, pageable)
+                .map(AuditLogResponse::from);
     }
 
     private Specification<AuditLog> buildSpecification(String action, String status, Long memberId, Long sessionId) {

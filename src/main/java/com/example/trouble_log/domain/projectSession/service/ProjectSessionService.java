@@ -1,7 +1,7 @@
 package com.example.trouble_log.domain.projectSession.service;
 
-import com.example.trouble_log.domain.audit.service.AuditLogService;
 import com.example.trouble_log.domain.ai.service.AzureOpenAiPromptService;
+import com.example.trouble_log.domain.audit.service.AuditLogService;
 import com.example.trouble_log.domain.interview.dto.InterviewQuestionResponse;
 import com.example.trouble_log.domain.interview.entity.InterviewQuestion;
 import com.example.trouble_log.domain.interview.repository.InterviewQuestionRepository;
@@ -18,9 +18,12 @@ import com.example.trouble_log.domain.user.repository.MemberRepository;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
@@ -47,9 +50,9 @@ public class ProjectSessionService {
                             null,
                             "PROJECT_SESSION_CREATE",
                             buildProjectSessionRequestSummary(request),
-                            "유저를 찾지 못했습니다."
+                            "회원을 찾지 못했습니다."
                     );
-                    return new ResponseStatusException(HttpStatus.NOT_FOUND, "유저를 찾지 못했습니다.");
+                    return new ResponseStatusException(HttpStatus.NOT_FOUND, "회원을 찾지 못했습니다.");
                 });
 
         ProjectSession projectSession = new ProjectSession(
@@ -60,13 +63,13 @@ public class ProjectSessionService {
 
         ProjectSession savedProjectSession = projectSessionRepository.save(projectSession);
 
-        auditLogService.recordSuccess(
+        runAfterCommit(() -> auditLogService.recordSuccess(
                 member.getId(),
                 savedProjectSession.getId(),
                 "PROJECT_SESSION_CREATE",
                 buildProjectSessionRequestSummary(request),
                 "sessionId=" + savedProjectSession.getId()
-        );
+        ));
 
         return new ProjectSessionResponse(savedProjectSession.getId());
     }
@@ -75,7 +78,7 @@ public class ProjectSessionService {
     public PreContextResponse createPreContext(Long sessionId, PreContextRequest request) {
         validateRequestBody(request);
         validateRequiredFields(
-                "회원 ID, 사전 컨텍스트 답변은 필수입니다.",
+                "회원 ID, 사전 컨텍스트 정보는 필수입니다.",
                 request.getMemberId(),
                 request.getCodePurpose(),
                 request.getTechRationale(),
@@ -97,7 +100,18 @@ public class ProjectSessionService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "해당 프로젝트 세션에 접근할 수 없습니다.");
         }
 
-        if (preContextRepository.existsByProjectSessionId(sessionId)) {
+        PreContext preContext = new PreContext(
+                projectSession,
+                request.getCodePurpose(),
+                request.getTechRationale(),
+                request.getExceptionHandling(),
+                request.getProjectScale()
+        );
+
+        PreContext savedPreContext;
+        try {
+            savedPreContext = preContextRepository.saveAndFlush(preContext);
+        } catch (DataIntegrityViolationException e) {
             auditLogService.recordFailure(
                     request.getMemberId(),
                     sessionId,
@@ -107,16 +121,6 @@ public class ProjectSessionService {
             );
             throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 사전 컨텍스트가 저장된 프로젝트 세션입니다.");
         }
-
-        PreContext preContext = new PreContext(
-                projectSession,
-                request.getCodePurpose(),
-                request.getTechRationale(),
-                request.getExceptionHandling(),
-                request.getProjectScale()
-        );
-
-        PreContext savedPreContext = preContextRepository.save(preContext);
 
         auditLogService.recordStarted(
                 request.getMemberId(),
@@ -154,13 +158,13 @@ public class ProjectSessionService {
                 .map(InterviewQuestionResponse::from)
                 .toList();
 
-        auditLogService.recordSuccess(
+        runAfterCommit(() -> auditLogService.recordSuccess(
                 request.getMemberId(),
                 sessionId,
                 "PRE_CONTEXT_CREATE",
                 buildPreContextRequestSummary(request),
                 "contextId=%d, questionCount=%d".formatted(savedPreContext.getId(), questionResponses.size())
-        );
+        ));
 
         return new PreContextResponse(savedPreContext.getId(), questionResponses);
     }
@@ -173,6 +177,20 @@ public class ProjectSessionService {
         }
 
         return interviewQuestionRepository.saveAll(interviewQuestions);
+    }
+
+    private void runAfterCommit(Runnable action) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            action.run();
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                action.run();
+            }
+        });
     }
 
     private void validateRequestBody(Object request) {

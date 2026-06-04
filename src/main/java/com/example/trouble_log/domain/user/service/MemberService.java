@@ -124,6 +124,10 @@ public class MemberService {
         String name = parts[0];
         String domain = parts[1];
 
+        if (isBlank(name) || isBlank(domain)) {
+            return "unknown";
+        }
+
         if (name.length() <= 2) {
             return name.charAt(0) + "***@" + domain;
         }

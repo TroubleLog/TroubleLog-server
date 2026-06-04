@@ -3,11 +3,13 @@ package com.example.trouble_log.domain.audit.service;
 import com.example.trouble_log.domain.audit.entity.AuditLog;
 import com.example.trouble_log.domain.audit.repository.AuditLogRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class AuditLogService {
 
@@ -60,8 +62,16 @@ public class AuditLogService {
                     errorMessage
             );
             auditLogRepository.save(auditLog);
-        } catch (RuntimeException ignored) {
-            // 감사 로그 저장 실패가 사용자 기능 실패로 이어지지 않도록 삼킨다.
+        } catch (RuntimeException e) {
+            log.warn(
+                    "Failed to save audit log. memberId={}, sessionId={}, action={}, status={}, error={}",
+                    memberId,
+                    sessionId,
+                    action,
+                    status,
+                    e.getMessage(),
+                    e
+            );
         }
     }
 }
