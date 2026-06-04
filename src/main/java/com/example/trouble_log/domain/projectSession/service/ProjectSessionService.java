@@ -1,5 +1,6 @@
 package com.example.trouble_log.domain.projectSession.service;
 
+import com.example.trouble_log.domain.audit.service.AuditLogService;
 import com.example.trouble_log.domain.ai.service.AzureOpenAiPromptService;
 import com.example.trouble_log.domain.interview.dto.InterviewQuestionResponse;
 import com.example.trouble_log.domain.interview.entity.InterviewQuestion;
@@ -32,6 +33,7 @@ public class ProjectSessionService {
     private final PreContextRepository preContextRepository;
     private final InterviewQuestionRepository interviewQuestionRepository;
     private final AzureOpenAiPromptService azureOpenAiPromptService;
+    private final AuditLogService auditLogService;
 
     @Transactional
     public ProjectSessionResponse create(ProjectSessionRequest request) {
@@ -39,7 +41,16 @@ public class ProjectSessionService {
         validateRequiredFields("회원 ID와 소스코드는 필수입니다.", request.getMemberId(), request.getCodeContent());
 
         Member member = memberRepository.findById(request.getMemberId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "유저를 찾지 못했습니다."));
+                .orElseThrow(() -> {
+                    auditLogService.recordFailure(
+                            request.getMemberId(),
+                            null,
+                            "PROJECT_SESSION_CREATE",
+                            buildProjectSessionRequestSummary(request),
+                            "유저를 찾지 못했습니다."
+                    );
+                    return new ResponseStatusException(HttpStatus.NOT_FOUND, "유저를 찾지 못했습니다.");
+                });
 
         ProjectSession projectSession = new ProjectSession(
                 member,
@@ -48,6 +59,14 @@ public class ProjectSessionService {
         );
 
         ProjectSession savedProjectSession = projectSessionRepository.save(projectSession);
+
+        auditLogService.recordSuccess(
+                member.getId(),
+                savedProjectSession.getId(),
+                "PROJECT_SESSION_CREATE",
+                buildProjectSessionRequestSummary(request),
+                "sessionId=" + savedProjectSession.getId()
+        );
 
         return new ProjectSessionResponse(savedProjectSession.getId());
     }
@@ -68,10 +87,24 @@ public class ProjectSessionService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "프로젝트 세션을 찾지 못했습니다."));
 
         if (!projectSession.getMember().getId().equals(request.getMemberId())) {
+            auditLogService.recordFailure(
+                    request.getMemberId(),
+                    sessionId,
+                    "PRE_CONTEXT_CREATE",
+                    buildPreContextRequestSummary(request),
+                    "해당 프로젝트 세션에 접근할 수 없습니다."
+            );
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "해당 프로젝트 세션에 접근할 수 없습니다.");
         }
 
         if (preContextRepository.existsByProjectSessionId(sessionId)) {
+            auditLogService.recordFailure(
+                    request.getMemberId(),
+                    sessionId,
+                    "PRE_CONTEXT_CREATE",
+                    buildPreContextRequestSummary(request),
+                    "이미 사전 컨텍스트가 저장된 프로젝트 세션입니다."
+            );
             throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 사전 컨텍스트가 저장된 프로젝트 세션입니다.");
         }
 
@@ -85,14 +118,49 @@ public class ProjectSessionService {
 
         PreContext savedPreContext = preContextRepository.save(preContext);
 
-        List<String> generatedQuestions = azureOpenAiPromptService.generateInterviewQuestions(
-                projectSession,
-                savedPreContext
+        auditLogService.recordStarted(
+                request.getMemberId(),
+                sessionId,
+                "AI_INTERVIEW_QUESTION_GENERATE",
+                buildAiQuestionRequestSummary(projectSession, savedPreContext)
         );
+
+        List<String> generatedQuestions;
+        try {
+            generatedQuestions = azureOpenAiPromptService.generateInterviewQuestions(
+                    projectSession,
+                    savedPreContext
+            );
+            auditLogService.recordSuccess(
+                    request.getMemberId(),
+                    sessionId,
+                    "AI_INTERVIEW_QUESTION_GENERATE",
+                    buildAiQuestionRequestSummary(projectSession, savedPreContext),
+                    "questionCount=" + generatedQuestions.size()
+            );
+        } catch (RuntimeException e) {
+            auditLogService.recordFailure(
+                    request.getMemberId(),
+                    sessionId,
+                    "AI_INTERVIEW_QUESTION_GENERATE",
+                    buildAiQuestionRequestSummary(projectSession, savedPreContext),
+                    e.getMessage()
+            );
+            throw e;
+        }
+
         List<InterviewQuestion> interviewQuestions = saveInterviewQuestions(projectSession, generatedQuestions);
         List<InterviewQuestionResponse> questionResponses = interviewQuestions.stream()
                 .map(InterviewQuestionResponse::from)
                 .toList();
+
+        auditLogService.recordSuccess(
+                request.getMemberId(),
+                sessionId,
+                "PRE_CONTEXT_CREATE",
+                buildPreContextRequestSummary(request),
+                "contextId=%d, questionCount=%d".formatted(savedPreContext.getId(), questionResponses.size())
+        );
 
         return new PreContextResponse(savedPreContext.getId(), questionResponses);
     }
@@ -119,5 +187,39 @@ public class ProjectSessionService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
             }
         }
+    }
+
+    private String buildProjectSessionRequestSummary(ProjectSessionRequest request) {
+        return "memberId=%d, codeLength=%d, githubUrlProvided=%s".formatted(
+                request.getMemberId(),
+                lengthOf(request.getCodeContent()),
+                request.getGithubUrl() != null && !request.getGithubUrl().isBlank()
+        );
+    }
+
+    private String buildPreContextRequestSummary(PreContextRequest request) {
+        return "memberId=%d, codePurposeLength=%d, techRationaleLength=%d, exceptionHandlingLength=%d, projectScale=%s"
+                .formatted(
+                        request.getMemberId(),
+                        lengthOf(request.getCodePurpose()),
+                        lengthOf(request.getTechRationale()),
+                        lengthOf(request.getExceptionHandling()),
+                        request.getProjectScale()
+                );
+    }
+
+    private String buildAiQuestionRequestSummary(ProjectSession projectSession, PreContext preContext) {
+        return "codeLength=%d, codePurposeLength=%d, techRationaleLength=%d, exceptionHandlingLength=%d, projectScale=%s"
+                .formatted(
+                        lengthOf(projectSession.getCodeContent()),
+                        lengthOf(preContext.getCodePurpose()),
+                        lengthOf(preContext.getTechRationale()),
+                        lengthOf(preContext.getExceptionHandling()),
+                        preContext.getProjectScale()
+                );
+    }
+
+    private int lengthOf(String value) {
+        return value == null ? 0 : value.length();
     }
 }
