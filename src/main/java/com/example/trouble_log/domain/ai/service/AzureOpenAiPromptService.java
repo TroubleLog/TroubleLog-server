@@ -198,12 +198,22 @@ public class AzureOpenAiPromptService {
     }
 
     // 면접 질문과 답변을 기반으로 답변 피드백과 점수를 생성한다.
-    public AnswerFeedbackResult evaluateAnswer(String question, String answer) {
-        if (isBlank(question) || isBlank(answer)) {
+    public AnswerFeedbackResult evaluateAnswer(
+            ProjectSession projectSession,
+            PreContext preContext,
+            String question,
+            String answer
+    ) {
+        if (projectSession == null || preContext == null || isBlank(question) || isBlank(answer)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "질문과 답변은 필수입니다.");
         }
 
         String userPrompt = loadPromptTemplate(ANSWER_FEEDBACK_USER_PROMPT_PATH)
+                .replace("{codeContent}", projectSession.getCodeContent())
+                .replace("{codePurpose}", preContext.getCodePurpose())
+                .replace("{techRationale}", preContext.getTechRationale())
+                .replace("{exceptionHandling}", preContext.getExceptionHandling())
+                .replace("{projectScale}", preContext.getProjectScale())
                 .replace("{question}", question)
                 .replace("{answer}", answer);
 

@@ -31,4 +31,20 @@ public class InterviewAnswer {
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    public InterviewAnswer(InterviewQuestion interviewQuestion, String answer, Boolean isSkipped) {
+        this.interviewQuestion = interviewQuestion;
+        this.answer = answer;
+        this.isSkipped = isSkipped != null ? isSkipped : false;
+        this.createdAt = LocalDateTime.now();
+    }
+
+    public void updateAnswer(String answer, Boolean isSkipped) {
+        this.answer = answer;
+        this.isSkipped = isSkipped != null ? isSkipped : false;
+    }
+
+    public void updateFeedback(String feedback) {
+        this.feedback = feedback;
+    }
 }
