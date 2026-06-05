@@ -20,6 +20,8 @@ public class MemberService {
     private final MemberRepository memberRepository;
     private final AuditLogService auditLogService;
 
+     // 이메일과 비밀번호를 검증해 로그인 가능한 회원 정보를 반환한다.
+
     public LoginResponse login(LoginRequest request) {
         validateLoginRequest(request);
 
@@ -57,6 +59,7 @@ public class MemberService {
         return new LoginResponse(member.getId(), member.getEmail(), member.getUsername());
     }
 
+    // 로그인 요청 본문과 필수 입력값이 모두 존재하는지 검사한다.
     private void validateLoginRequest(LoginRequest request) {
         if (request == null || isBlank(request.getEmail()) || isBlank(request.getPassword())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "이메일과 패스워드는 필수입니다.");
@@ -64,13 +67,18 @@ public class MemberService {
     }
 
     // 함수에 공백이나 null을 넣으면 true라고 반환, NPE 대비
+    // 문자열이 null 이거나 공백만 포함하는지 확인한다.
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
     }
 
+    // 현재는 별도 상태 변경 없이 로그아웃 호출 지점을 위한 빈 메서드를 제공한다.
     public void logout() {
     }
 
+    /**
+     * 회원가입 요청을 검증하고 새 회원을 저장한 뒤 로그인 응답 형태로 반환한다.
+     */
     @Transactional
     public LoginResponse signup(SignUpRequest request) {
         validateSignUpRequest(request);
@@ -106,6 +114,9 @@ public class MemberService {
         return new LoginResponse(savedMember.getId(), savedMember.getEmail(), savedMember.getUsername());
     }
 
+    /**
+     * 회원가입 요청 본문과 필수 입력값이 모두 존재하는지 검사한다.
+     */
     private void validateSignUpRequest(SignUpRequest request) {
         if (request == null
                 || isBlank(request.getEmail())
@@ -115,6 +126,9 @@ public class MemberService {
         }
     }
 
+    /**
+     * 감사 로그에 남길 때 개인정보 노출을 줄이기 위해 이메일 일부를 마스킹한다.
+     */
     private String maskEmail(String email) {
         if (isBlank(email) || !email.contains("@")) {
             return "unknown";

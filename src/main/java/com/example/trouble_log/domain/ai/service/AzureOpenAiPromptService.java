@@ -31,6 +31,7 @@ public class AzureOpenAiPromptService {
     private static final String CODE_EVALUATION_SYSTEM_PROMPT_PATH = "prompts/code-evaluation-system.txt";
     private static final String CODE_EVALUATION_USER_PROMPT_PATH   = "prompts/code-evaluation-user.txt";
 
+    // 시스템 프롬프트와 사용자 프롬프트를 기반으로 Azure OpenAI에 요청을 보내고 원문 응답을 반환한다.
     public String generate(String systemPrompt, String userPrompt) {
         if (isBlank(userPrompt)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "userPrompt는 필수입니다.");
@@ -47,6 +48,7 @@ public class AzureOpenAiPromptService {
                 .content();
     }
 
+    // 프로젝트 세션과 사전 컨텍스트를 이용해 면접 질문 3개를 생성한다.
     public List<String> generateInterviewQuestions(ProjectSession projectSession, PreContext preContext) {
         validateInterviewQuestionSource(projectSession, preContext);
 
@@ -59,6 +61,7 @@ public class AzureOpenAiPromptService {
         );
     }
 
+    // 코드와 사전 컨텍스트 문자열을 직접 받아 면접 질문 3개를 생성한다.
     public List<String> generateInterviewQuestions(
             String codeContent,
             String codePurpose,
@@ -88,6 +91,7 @@ public class AzureOpenAiPromptService {
         return parseQuestionResponse(response);
     }
 
+    // 면접 질문 생성에 필요한 프로젝트 세션과 사전 컨텍스트가 모두 준비되었는지 검증한다.
     private void validateInterviewQuestionSource(ProjectSession projectSession, PreContext preContext) {
         if (projectSession == null || preContext == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "프로젝트 세션과 사전 컨텍스트는 필수입니다.");
@@ -102,6 +106,7 @@ public class AzureOpenAiPromptService {
         }
     }
 
+    // 면접 질문 생성에 필요한 입력 문자열이 모두 비어 있지 않은지 검증한다.
     private void validateInterviewQuestionSource(
             String codeContent,
             String codePurpose,
@@ -118,6 +123,7 @@ public class AzureOpenAiPromptService {
         }
     }
 
+    // 질문 생성용 사용자 프롬프트 템플릿에 코드와 컨텍스트 값을 주입한다.
     private String buildInterviewQuestionPrompt(
             String codeContent,
             String codePurpose,
@@ -133,6 +139,7 @@ public class AzureOpenAiPromptService {
                 .replace("{projectScale}", projectScale);
     }
 
+    // 클래스패스에 있는 프롬프트 템플릿 파일을 UTF-8 문자열로 읽어온다.
     private String loadPromptTemplate(String path) {
         try {
             return new ClassPathResource(path).getContentAsString(StandardCharsets.UTF_8);
@@ -141,6 +148,7 @@ public class AzureOpenAiPromptService {
         }
     }
 
+    // 질문 생성 응답에서 JSON 배열을 추출하고 질문 목록 형태로 변환한다.
     private List<String> parseQuestionResponse(String response) {
         String json = extractJsonArray(response);
 
@@ -158,6 +166,7 @@ public class AzureOpenAiPromptService {
         }
     }
 
+    // OpenAI 응답 문자열에서 질문 목록에 해당하는 JSON 배열 구간만 추출한다.
     private String extractJsonArray(String response) {
         if (isBlank(response)) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Azure OpenAI 질문 생성 응답이 비어 있습니다.");
@@ -173,10 +182,12 @@ public class AzureOpenAiPromptService {
         return response.substring(startIndex, endIndex + 1);
     }
 
+    // 문자열이 null 이거나 공백만 포함하는지 확인한다.
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
     }
 
+    // AI가 반환한 점수가 허용 범위를 벗어나지 않았는지 검증한다.
     private void validateScore(String field, int score, int min, int max) {
         if (score < min || score > max) {
             throw new ResponseStatusException(
@@ -186,12 +197,21 @@ public class AzureOpenAiPromptService {
         }
     }
 
-    public AnswerFeedbackResult evaluateAnswer(String question, String answer) {
-        if (isBlank(question) || isBlank(answer)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "질문과 답변은 필수입니다.");
-        }
+    // 면접 질문과 답변을 기반으로 답변 피드백과 점수를 생성한다.
+    public AnswerFeedbackResult evaluateAnswer(
+            ProjectSession projectSession,
+            PreContext preContext,
+            String question,
+            String answer
+    ) {
+        validateAnswerFeedbackSource(projectSession, preContext, question, answer);
 
         String userPrompt = loadPromptTemplate(ANSWER_FEEDBACK_USER_PROMPT_PATH)
+                .replace("{codeContent}", projectSession.getCodeContent())
+                .replace("{codePurpose}", preContext.getCodePurpose())
+                .replace("{techRationale}", preContext.getTechRationale())
+                .replace("{exceptionHandling}", preContext.getExceptionHandling())
+                .replace("{projectScale}", preContext.getProjectScale())
                 .replace("{question}", question)
                 .replace("{answer}", answer);
 
@@ -203,6 +223,29 @@ public class AzureOpenAiPromptService {
         return parseAnswerFeedbackResponse(response);
     }
 
+    // 답변 피드백 생성에 필요한 프로젝트 세션, 사전 컨텍스트, 질문, 답변이 모두 준비되었는지 검증한다.
+    private void validateAnswerFeedbackSource(
+            ProjectSession projectSession,
+            PreContext preContext,
+            String question,
+            String answer
+    ) {
+        if (projectSession == null || preContext == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "프로젝트 세션과 사전 컨텍스트는 필수입니다.");
+        }
+
+        if (isBlank(projectSession.getCodeContent())
+                || isBlank(preContext.getCodePurpose())
+                || isBlank(preContext.getTechRationale())
+                || isBlank(preContext.getExceptionHandling())
+                || isBlank(preContext.getProjectScale())
+                || isBlank(question)
+                || isBlank(answer)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "답변 피드백 생성에 필요한 입력값이 비어 있습니다.");
+        }
+    }
+
+    // 답변 피드백 응답 JSON을 DTO로 변환하고 점수 형식을 검증한다.
     private AnswerFeedbackResult parseAnswerFeedbackResponse(String response) {
         String json = extractJsonObject(response);
         try {
@@ -223,6 +266,7 @@ public class AzureOpenAiPromptService {
     }
 
     // 답변 피드백
+    // 코드 내용을 기반으로 코드 평가 점수와 코멘트를 생성한다.
     public CodeEvaluationResult evaluateCode(String codeContent) {
         if (isBlank(codeContent)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "코드는 필수입니다.");
@@ -240,6 +284,7 @@ public class AzureOpenAiPromptService {
     }
 
     // 코드 정량 평가
+    // 코드 평가 응답 JSON을 DTO로 변환하고 각 항목 점수 범위를 검증한다.
     private CodeEvaluationResult parseCodeEvaluationResponse(String response) {
         String json = extractJsonObject(response);
         try {
@@ -265,6 +310,7 @@ public class AzureOpenAiPromptService {
     }
 
     //JSON 객체 추출 헬퍼
+    // OpenAI 응답 문자열에서 JSON 객체 구간만 추출한다.
     private String extractJsonObject(String response) {
         if (isBlank(response)) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Azure OpenAI 응답이 비어 있습니다.");

@@ -23,12 +23,16 @@ public class InterviewAnswer {
     @Column(columnDefinition = "TEXT")
     private String answer;
 
-    @Column(nullable = false)
-    private Boolean isSkipped = false;
-
-    @Column(columnDefinition = "TEXT")
-    private String feedback;
-
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    public InterviewAnswer(InterviewQuestion interviewQuestion, String answer) {
+        this.interviewQuestion = interviewQuestion;
+        this.answer = answer;
+        this.createdAt = LocalDateTime.now();
+    }
+
+    public void updateAnswer(String answer) {
+        this.answer = answer;
+    }
 }

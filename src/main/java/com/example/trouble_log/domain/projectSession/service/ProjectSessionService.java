@@ -39,6 +39,7 @@ public class ProjectSessionService {
     private final AuditLogService auditLogService;
 
     @Transactional
+    // 회원의 코드와 GitHub URL을 기반으로 새 프로젝트 세션을 생성한다.
     public ProjectSessionResponse create(ProjectSessionRequest request) {
         validateRequestBody(request);
         validateRequiredFields("회원 ID와 소스코드는 필수입니다.", request.getMemberId(), request.getCodeContent());
@@ -75,6 +76,7 @@ public class ProjectSessionService {
     }
 
     @Transactional
+    // 사전 컨텍스트를 저장하고 AI 면접 질문을 생성해 함께 반환한다.
     public PreContextResponse createPreContext(Long sessionId, PreContextRequest request) {
         validateRequestBody(request);
         validateRequiredFields(
@@ -169,6 +171,7 @@ public class ProjectSessionService {
         return new PreContextResponse(savedPreContext.getId(), questionResponses);
     }
 
+    // 생성된 질문 문자열 목록을 세션에 연결된 면접 질문 엔티티로 저장한다.
     private List<InterviewQuestion> saveInterviewQuestions(ProjectSession projectSession, List<String> questions) {
         List<InterviewQuestion> interviewQuestions = new ArrayList<>();
 
@@ -179,6 +182,7 @@ public class ProjectSessionService {
         return interviewQuestionRepository.saveAll(interviewQuestions);
     }
 
+    // 현재 트랜잭션이 커밋된 뒤 후속 작업을 실행하도록 등록한다.
     private void runAfterCommit(Runnable action) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
             action.run();
@@ -193,12 +197,14 @@ public class ProjectSessionService {
         });
     }
 
+    // 요청 본문 자체가 누락되지 않았는지 검사한다.
     private void validateRequestBody(Object request) {
         if (request == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "요청 본문은 필수입니다.");
         }
     }
 
+    // 전달받은 필수 값들 중 null 이거나 빈 문자열이 없는지 검사한다.
     private void validateRequiredFields(String message, Object... values) {
         for (Object value : values) {
             if (value == null || value instanceof String stringValue && stringValue.isBlank()) {
@@ -207,6 +213,7 @@ public class ProjectSessionService {
         }
     }
 
+    // 프로젝트 세션 생성 요청을 감사 로그용 요약 문자열로 변환한다.
     private String buildProjectSessionRequestSummary(ProjectSessionRequest request) {
         return "memberId=%d, codeLength=%d, githubUrlProvided=%s".formatted(
                 request.getMemberId(),
@@ -215,6 +222,7 @@ public class ProjectSessionService {
         );
     }
 
+    // 사전 컨텍스트 생성 요청을 감사 로그용 요약 문자열로 변환한다.
     private String buildPreContextRequestSummary(PreContextRequest request) {
         return "memberId=%d, codePurposeLength=%d, techRationaleLength=%d, exceptionHandlingLength=%d, projectScale=%s"
                 .formatted(
@@ -226,6 +234,7 @@ public class ProjectSessionService {
                 );
     }
 
+    // AI 질문 생성 요청에 사용된 입력값을 감사 로그용 요약 문자열로 변환한다.
     private String buildAiQuestionRequestSummary(ProjectSession projectSession, PreContext preContext) {
         return "codeLength=%d, codePurposeLength=%d, techRationaleLength=%d, exceptionHandlingLength=%d, projectScale=%s"
                 .formatted(
@@ -237,6 +246,7 @@ public class ProjectSessionService {
                 );
     }
 
+    // 문자열 길이를 반환하고 값이 없으면 0으로 처리한다.
     private int lengthOf(String value) {
         return value == null ? 0 : value.length();
     }
