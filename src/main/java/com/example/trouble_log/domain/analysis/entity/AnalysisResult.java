@@ -39,19 +39,19 @@ public class AnalysisResult {
 
     // --- 클린코드 평가 스코어 영역 ---
     @Column(nullable = false)
-    private Integer scoreNaming;
+    private int scoreNaming;
 
     @Column(nullable = false)
-    private Integer scoreSingleResponsibility;
+    private int scoreSingleResponsibility;
 
     @Column(nullable = false)
-    private Integer scoreErrorHandling;
+    private int scoreErrorHandling;
 
     @Column(nullable = false)
-    private Integer scoreDuplication;
+    private int scoreDuplication;
 
     @Column(nullable = false)
-    private Integer scoreCommentQuality;
+    private int scoreCommentQuality;
 
     // --- 트러블 슈팅 리포트 영역 ---
     @Column(columnDefinition = "TEXT", nullable = false)
