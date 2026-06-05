@@ -204,9 +204,7 @@ public class AzureOpenAiPromptService {
             String question,
             String answer
     ) {
-        if (projectSession == null || preContext == null || isBlank(question) || isBlank(answer)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "질문과 답변은 필수입니다.");
-        }
+        validateAnswerFeedbackSource(projectSession, preContext, question, answer);
 
         String userPrompt = loadPromptTemplate(ANSWER_FEEDBACK_USER_PROMPT_PATH)
                 .replace("{codeContent}", projectSession.getCodeContent())
@@ -223,6 +221,28 @@ public class AzureOpenAiPromptService {
         );
 
         return parseAnswerFeedbackResponse(response);
+    }
+
+    // 답변 피드백 생성에 필요한 프로젝트 세션, 사전 컨텍스트, 질문, 답변이 모두 준비되었는지 검증한다.
+    private void validateAnswerFeedbackSource(
+            ProjectSession projectSession,
+            PreContext preContext,
+            String question,
+            String answer
+    ) {
+        if (projectSession == null || preContext == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "프로젝트 세션과 사전 컨텍스트는 필수입니다.");
+        }
+
+        if (isBlank(projectSession.getCodeContent())
+                || isBlank(preContext.getCodePurpose())
+                || isBlank(preContext.getTechRationale())
+                || isBlank(preContext.getExceptionHandling())
+                || isBlank(preContext.getProjectScale())
+                || isBlank(question)
+                || isBlank(answer)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "답변 피드백 생성에 필요한 입력값이 비어 있습니다.");
+        }
     }
 
     // 답변 피드백 응답 JSON을 DTO로 변환하고 점수 형식을 검증한다.
