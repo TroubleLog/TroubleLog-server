@@ -31,4 +31,17 @@ public class InterviewAnswer {
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    // 답변 저장용 생성자
+    public InterviewAnswer(InterviewQuestion interviewQuestion,
+                           String answer,
+                           Boolean isSkipped,
+                           String feedback) {
+        this.interviewQuestion = interviewQuestion;
+        this.answer = answer;
+        this.isSkipped = isSkipped;
+        this.feedback = feedback;
+        this.createdAt = LocalDateTime.now();
+    }
 }
+
