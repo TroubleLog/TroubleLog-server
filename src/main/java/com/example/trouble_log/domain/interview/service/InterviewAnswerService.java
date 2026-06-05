@@ -69,8 +69,6 @@ public class InterviewAnswerService {
         return new InterviewAnswerResponse(
                 interviewQuestion.getId(),
                 interviewQuestion.getQuestionSequence(),
-                interviewQuestion.getQuestion(),
-                savedAnswer.getAnswer(),
                 savedAnswer.getIsSkipped(),
                 feedbackResult
         );

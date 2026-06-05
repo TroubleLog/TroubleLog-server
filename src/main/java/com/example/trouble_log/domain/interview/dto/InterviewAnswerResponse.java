@@ -16,12 +16,6 @@ public class InterviewAnswerResponse {
     @Schema(description = "질문 순서", example = "1")
     private Integer questionSequence;
 
-    @Schema(description = "면접 질문", example = "Spring Boot와 JPA를 선택한 이유는 무엇인가요?")
-    private String question;
-
-    @Schema(description = "저장된 답변", example = "트랜잭션 관리와 생산성 측면에서 선택했습니다.")
-    private String answer;
-
     @Schema(description = "답변 건너뛰기 여부", example = "false")
     private Boolean isSkipped;
 
