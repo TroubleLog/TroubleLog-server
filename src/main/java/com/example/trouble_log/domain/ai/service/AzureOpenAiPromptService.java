@@ -267,6 +267,7 @@ public class AzureOpenAiPromptService {
         }
     }
 
+    
     // 리포트 작성
     public String generateReport(
             String codeContent, String codePurpose, String techRationale,
