@@ -31,14 +31,12 @@ public class InterviewAnswer {
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    // main 브랜치 생성자 유지
     public InterviewAnswer(InterviewQuestion interviewQuestion, String answer) {
         this.interviewQuestion = interviewQuestion;
         this.answer = answer;
         this.createdAt = LocalDateTime.now();
     }
 
-    // [내 브랜치] 답변 저장용 생성자 추가
     public InterviewAnswer(InterviewQuestion interviewQuestion,
                            String answer,
                            Boolean isSkipped,
@@ -50,7 +48,6 @@ public class InterviewAnswer {
         this.createdAt = LocalDateTime.now();
     }
 
-    // main 브랜치 메서드 유지
     public void updateAnswer(String answer) {
         this.answer = answer;
     }
