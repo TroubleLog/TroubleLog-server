@@ -3,36 +3,27 @@ package com.example.trouble_log.domain.interview.service;
 import com.example.trouble_log.domain.ai.dto.AnswerFeedbackResult;
 import com.example.trouble_log.domain.ai.service.AzureOpenAiPromptService;
 import com.example.trouble_log.domain.audit.service.AuditLogService;
-import com.example.trouble_log.domain.interview.dto.InterviewAnswerRequest;
-import com.example.trouble_log.domain.interview.dto.InterviewAnswerResponse;
-import com.example.trouble_log.domain.interview.entity.InterviewAnswer;
+import com.example.trouble_log.domain.interview.dto.InterviewAnswerFeedbackRequest;
+import com.example.trouble_log.domain.interview.dto.InterviewAnswerFeedbackResponse;
 import com.example.trouble_log.domain.interview.entity.InterviewQuestion;
-import com.example.trouble_log.domain.interview.repository.InterviewAnswerRepository;
 import com.example.trouble_log.domain.interview.repository.InterviewQuestionRepository;
 import com.example.trouble_log.domain.projectSession.entity.PreContext;
 import com.example.trouble_log.domain.projectSession.entity.ProjectSession;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class InterviewAnswerService {
 
     private final InterviewQuestionRepository interviewQuestionRepository;
-    private final InterviewAnswerRepository interviewAnswerRepository;
     private final AzureOpenAiPromptService azureOpenAiPromptService;
     private final AuditLogService auditLogService;
-    private final ObjectMapper objectMapper;
 
-    // 질문별 답변을 저장하고 필요하면 AI 피드백까지 생성해 함께 반환한다.
-    @Transactional
-    public InterviewAnswerResponse saveAnswer(Long questionId, InterviewAnswerRequest request) {
+    // 질문별 현재 답변을 저장하지 않고 AI 피드백만 생성해 반환한다.
+    public InterviewAnswerFeedbackResponse createFeedback(Long questionId, InterviewAnswerFeedbackRequest request) {
         validateRequest(questionId, request);
 
         InterviewQuestion interviewQuestion = interviewQuestionRepository.findById(questionId)
@@ -40,36 +31,16 @@ public class InterviewAnswerService {
 
         validateOwnership(interviewQuestion, request.getMemberId());
 
-        boolean isSkipped = Boolean.TRUE.equals(request.getIsSkipped());
         String normalizedAnswer = normalizeAnswer(request.getAnswer());
-
-        if (!isSkipped && isBlank(normalizedAnswer)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "답변을 입력하거나 건너뛰기 여부를 선택해야 합니다.");
+        if (isBlank(normalizedAnswer)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "AI 피드백을 받으려면 답변을 입력해야 합니다.");
         }
 
-        if (isSkipped && Boolean.TRUE.equals(request.getRequestFeedback())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "건너뛴 답변에 대해서는 AI 피드백을 요청할 수 없습니다.");
-        }
+        AnswerFeedbackResult feedbackResult = createFeedback(interviewQuestion, normalizedAnswer, request.getMemberId());
 
-        InterviewAnswer interviewAnswer = interviewAnswerRepository.findByInterviewQuestionId(questionId)
-                .orElseGet(() -> new InterviewAnswer(interviewQuestion, normalizedAnswer, isSkipped));
-
-        interviewAnswer.updateAnswer(normalizedAnswer, isSkipped);
-
-        AnswerFeedbackResult feedbackResult = null;
-        if (Boolean.TRUE.equals(request.getRequestFeedback())) {
-            feedbackResult = createFeedback(interviewQuestion, normalizedAnswer, request.getMemberId());
-            interviewAnswer.updateFeedback(serializeFeedback(feedbackResult));
-        } else {
-            interviewAnswer.updateFeedback(null);
-        }
-
-        InterviewAnswer savedAnswer = interviewAnswerRepository.save(interviewAnswer);
-
-        return new InterviewAnswerResponse(
+        return new InterviewAnswerFeedbackResponse(
                 interviewQuestion.getId(),
                 interviewQuestion.getQuestionSequence(),
-                savedAnswer.getIsSkipped(),
                 feedbackResult
         );
     }
@@ -116,7 +87,7 @@ public class InterviewAnswerService {
     }
 
     // 요청 본문과 경로 변수에 필요한 값이 모두 존재하는지 확인한다.
-    private void validateRequest(Long questionId, InterviewAnswerRequest request) {
+    private void validateRequest(Long questionId, InterviewAnswerFeedbackRequest request) {
         if (questionId == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "질문 ID는 필수입니다.");
         }
@@ -136,15 +107,6 @@ public class InterviewAnswerService {
     // 프론트에서 넘어온 답변을 저장용 문자열로 정규화한다.
     private String normalizeAnswer(String answer) {
         return isBlank(answer) ? null : answer.trim();
-    }
-
-    // 피드백 DTO를 DB 저장용 JSON 문자열로 직렬화한다.
-    private String serializeFeedback(AnswerFeedbackResult feedbackResult) {
-        try {
-            return objectMapper.writeValueAsString(feedbackResult);
-        } catch (JsonProcessingException e) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "AI 피드백 저장 형식 변환에 실패했습니다.", e);
-        }
     }
 
     // AI 피드백 요청 내용을 감사 로그용 요약 문자열로 변환한다.

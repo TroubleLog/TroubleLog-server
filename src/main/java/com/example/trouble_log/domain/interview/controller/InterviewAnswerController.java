@@ -1,7 +1,7 @@
 package com.example.trouble_log.domain.interview.controller;
 
-import com.example.trouble_log.domain.interview.dto.InterviewAnswerRequest;
-import com.example.trouble_log.domain.interview.dto.InterviewAnswerResponse;
+import com.example.trouble_log.domain.interview.dto.InterviewAnswerFeedbackRequest;
+import com.example.trouble_log.domain.interview.dto.InterviewAnswerFeedbackResponse;
 import com.example.trouble_log.domain.interview.service.InterviewAnswerService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -18,12 +18,12 @@ public class InterviewAnswerController {
 
     private final InterviewAnswerService interviewAnswerService;
 
-    @PostMapping("/{questionId}/answer")
-    public ResponseEntity<InterviewAnswerResponse> saveAnswer(
+    @PostMapping("/{questionId}/feedback")
+    public ResponseEntity<InterviewAnswerFeedbackResponse> createFeedback(
             @PathVariable Long questionId,
-            @RequestBody InterviewAnswerRequest request
+            @RequestBody InterviewAnswerFeedbackRequest request
     ) {
-        InterviewAnswerResponse response = interviewAnswerService.saveAnswer(questionId, request);
+        InterviewAnswerFeedbackResponse response = interviewAnswerService.createFeedback(questionId, request);
         return ResponseEntity.ok(response);
     }
 }
