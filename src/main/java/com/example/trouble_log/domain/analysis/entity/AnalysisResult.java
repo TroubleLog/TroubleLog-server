@@ -37,6 +37,22 @@ public class AnalysisResult {
     @Column(nullable = false)
     private Integer scoreArchitecture;
 
+    // --- 클린코드 평가 스코어 영역 ---
+    @Column(nullable = false)
+    private Integer scoreNaming;
+
+    @Column(nullable = false)
+    private Integer scoreSingleResponsibility;
+
+    @Column(nullable = false)
+    private Integer scoreErrorHandling;
+
+    @Column(nullable = false)
+    private Integer scoreDuplication;
+
+    @Column(nullable = false)
+    private Integer scoreCommentQuality;
+
     // --- 트러블 슈팅 리포트 영역 ---
     @Column(columnDefinition = "TEXT", nullable = false)
     private String reportBackground;
