@@ -226,6 +226,24 @@ public class AzureOpenAiPromptService {
         return parseAnswerFeedbackResponse(response);
     }
 
+    // 테스트 및 단순 호출용 오버로딩 메서드
+    public AnswerFeedbackResult evaluateAnswer(String question, String answer) {
+        if (isBlank(question) || isBlank(answer)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "질문과 답변은 필수입니다.");
+        }
+
+        String userPrompt = loadPromptTemplate(ANSWER_FEEDBACK_USER_PROMPT_PATH)
+                .replace("{question}", question)
+                .replace("{answer}", answer);
+
+        String response = generate(
+                loadPromptTemplate(ANSWER_FEEDBACK_SYSTEM_PROMPT_PATH),
+                userPrompt
+        );
+
+        return parseAnswerFeedbackResponse(response);
+    }
+
     // 답변 피드백 생성에 필요한 프로젝트 세션, 사전 컨텍스트, 질문, 답변이 모두 준비되었는지 검증한다.
     private void validateAnswerFeedbackSource(
             ProjectSession projectSession,
