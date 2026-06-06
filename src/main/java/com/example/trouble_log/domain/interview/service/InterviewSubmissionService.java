@@ -4,10 +4,8 @@ import com.example.trouble_log.domain.audit.service.AuditLogService;
 import com.example.trouble_log.domain.interview.dto.InterviewSubmitAnswerRequest;
 import com.example.trouble_log.domain.interview.dto.InterviewSubmitRequest;
 import com.example.trouble_log.domain.interview.dto.InterviewSubmitResponse;
-import com.example.trouble_log.domain.interview.dto.PersonalInfoWarning;
 import com.example.trouble_log.domain.interview.entity.InterviewAnswer;
 import com.example.trouble_log.domain.interview.entity.InterviewQuestion;
-import com.example.trouble_log.domain.interview.exception.PersonalInfoDetectedException;
 import com.example.trouble_log.domain.interview.repository.InterviewAnswerRepository;
 import com.example.trouble_log.domain.interview.repository.InterviewQuestionRepository;
 import com.example.trouble_log.domain.projectSession.entity.ProjectSession;
@@ -17,7 +15,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -31,15 +28,13 @@ import org.springframework.web.server.ResponseStatusException;
 public class InterviewSubmissionService {
 
     private static final int REQUIRED_QUESTION_COUNT = 3;
-    private static final String UNANSWERED_MESSAGE = "사용자 답변 안 함";
 
     private final ProjectSessionRepository projectSessionRepository;
     private final InterviewQuestionRepository interviewQuestionRepository;
     private final InterviewAnswerRepository interviewAnswerRepository;
-    private final PersonalInfoDetectionService personalInfoDetectionService;
     private final AuditLogService auditLogService;
 
-    // 최종 답변 3개를 저장한 뒤 개인정보 감지 결과에 따라 리포트 생성 가능 상태를 반환한다.
+    // 최종 답변 3개를 저장한 뒤 리포트 생성 가능 상태를 반환한다.
     @Transactional
     public InterviewSubmitResponse submit(Long sessionId, InterviewSubmitRequest request) {
         validateRequest(sessionId, request);
@@ -54,19 +49,6 @@ public class InterviewSubmissionService {
 
         Map<Long, String> finalAnswers = validateAndNormalizeFinalAnswers(questions, request.getAnswers());
         List<InterviewAnswer> savedAnswers = saveFinalAnswers(questions, finalAnswers);
-
-        String answersText = buildAnswersText(questions, savedAnswers);
-        List<PersonalInfoWarning> warnings = personalInfoDetectionService.detect(answersText);
-        if (!warnings.isEmpty()) {
-            auditLogService.recordFailure(
-                    request.getMemberId(),
-                    sessionId,
-                    "INTERVIEW_ANSWER_SUBMIT",
-                    buildSubmitRequestSummary(questions, savedAnswers),
-                    "개인정보 감지: " + warnings.stream().map(PersonalInfoWarning::getType).toList()
-            );
-            throw new PersonalInfoDetectedException(warnings);
-        }
 
         auditLogService.recordSuccess(
                 request.getMemberId(),
@@ -174,21 +156,6 @@ public class InterviewSubmissionService {
         interviewAnswer.updateAnswer(finalAnswer);
 
         return interviewAnswerRepository.save(interviewAnswer);
-    }
-
-    // 개인정보 감지와 리포트 생성 요청에 사용할 질문/답변 텍스트를 만든다.
-    private String buildAnswersText(List<InterviewQuestion> questions, List<InterviewAnswer> answers) {
-        Map<Long, InterviewAnswer> answerByQuestionId = answers.stream()
-                .collect(Collectors.toMap(answer -> answer.getInterviewQuestion().getId(), Function.identity()));
-
-        return questions.stream()
-                .map(question -> question.getQuestion() + "\n" + toReportAnswer(answerByQuestionId.get(question.getId()).getAnswer()))
-                .reduce("", (left, right) -> left + "\n" + right);
-    }
-
-    // 답변이 비어 있으면 AI 리포트가 미답변 상태를 이해할 수 있는 명시 문구로 변환한다.
-    private String toReportAnswer(String answer) {
-        return answer == null || answer.isBlank() ? UNANSWERED_MESSAGE : answer;
     }
 
     // 최종 제출 요청 내용을 감사 로그용 요약 문자열로 변환한다.
