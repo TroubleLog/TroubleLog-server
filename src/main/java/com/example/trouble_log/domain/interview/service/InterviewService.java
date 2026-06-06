@@ -143,9 +143,15 @@ public class InterviewService {
                         && q.getInterviewAnswer().getFeedback() != null)
                 .map(q -> {
                     try {
-                        return objectMapper.readValue(
+                        AnswerFeedbackResult result = objectMapper.readValue(
                                 q.getInterviewAnswer().getFeedback(),
                                 AnswerFeedbackResult.class);
+                        // [추가] scores null 체크
+                        if (result == null || result.getScores() == null) {
+                            log.warn("피드백 scores 없음. questionId={}", q.getId());
+                            return null;
+                        }
+                        return result;
                     } catch (Exception e) {
                         log.warn("피드백 파싱 실패. questionId={}", q.getId());
                         return null;
@@ -161,7 +167,9 @@ public class InterviewService {
         RadarScore radarScore = null;
         if (!feedbackList.isEmpty()) {
             AnswerFeedbackResult avgFeedback = averageFeedback(feedbackList);
-            radarScore = radarCalculator.calculate(avgFeedback, codeEval);
+            if (avgFeedback != null) {                    // ← null 체크 추가
+                radarScore = radarCalculator.calculate(avgFeedback, codeEval);
+            }
         }
 
         // 리포트 생성
@@ -195,6 +203,13 @@ public class InterviewService {
 
     // 전체 답변 피드백 평균 계산
     private AnswerFeedbackResult averageFeedback(List<AnswerFeedbackResult> feedbackList) {
+        // scores null 방어
+        List<AnswerFeedbackResult> validList = feedbackList.stream()
+                .filter(f -> f.getScores() != null)
+                .toList();
+
+        if (validList.isEmpty()) return null;
+
         int specificity = (int) Math.round(feedbackList.stream()
                 .mapToInt(f -> f.getScores().getSpecificity()).average().orElse(0));
         int structure = (int) Math.round(feedbackList.stream()
