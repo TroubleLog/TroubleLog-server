@@ -1,35 +1,34 @@
 # TroubleLog-server
-2026-1 인공지능산업체특강
+
+개발자가 프로젝트 코드와 구현 의도를 등록하면, AI가 기술 면접 질문을 생성하고 답변 피드백과 역량 분석을 제공하는 백엔드 서버입니다.
+
+## 주요 기능
+
+- 프로젝트 코드 및 사전 컨텍스트 등록
+- Azure OpenAI 기반 면접 질문 생성
+- 질문별 답변 AI 피드백 제공
+- 최종 답변 제출 전 개인정보/민감정보 감지
+- 면접 리포트 및 역량 레이더 생성을 위한 프롬프트 관리
+
+## 프로젝트 아키텍처
+<img src="docs/Untitled-2026-06-04-0047.png" alt="Architecture" width="700">
 
 ## 개발 환경
 
 - Java 21
 - Spring Boot 3.5.14
 
-## Azure OpenAI 설정
+## 면접 답변 흐름
 
-이 서버는 Spring AI Azure OpenAI 클라이언트를 사용합니다. 키와 엔드포인트는 코드에 저장하지 않고 환경변수로 주입합니다.
+1. 사용자가 프로젝트 코드와 사전 컨텍스트를 등록합니다.
+2. 서버가 프로젝트 맥락에 맞는 면접 질문 3개를 생성합니다.
+3. 사용자는 각 질문에 답변하면서 필요할 때 AI 피드백을 받을 수 있습니다.
+4. 최종 제출 시 서버가 답변 3개를 저장하고 개인정보 포함 여부를 확인합니다.
+5. 개인정보가 없으면 리포트 생성 단계로 이어집니다.
 
-프롬프팅 담당자를 위한 자세한 파일 설명과 테스트 방법은 [Azure OpenAI 프롬프팅 테스트 가이드](docs/azure-openai-prompting.md)를 참고하세요.
+## 책임 있는 AI
 
-```bash
-export AZURE_OPENAI_ENDPOINT="https://<your-resource-name>.openai.azure.com/"
-export AZURE_OPENAI_API_KEY="<your-api-key>"
-export AZURE_OPENAI_DEPLOYMENT_NAME="<your-gpt-4o-deployment-name>"
-export AZURE_OPENAI_MODEL="gpt-4o"
-```
-
-CLI 테스트:
-
-```bash
-export AZURE_OPENAI_SYSTEM_PROMPT="너는 장애 기록을 구조화하는 백엔드 어시스턴트야."
-export AZURE_OPENAI_TEST_PROMPT="로그 내용을 요약하고 원인 후보를 3개 뽑아줘."
-
-./gradlew aiCli
-```
-
-한 번만 실행할 질문을 인라인 환경변수로 넣을 수도 있습니다.
-
-```bash
-AZURE_OPENAI_TEST_PROMPT="로그 내용을 요약하고 원인 후보를 3개 뽑아줘." ./gradlew aiCli
-```
+- AI 호출 시작, 성공, 실패 이력을 감사 로그로 기록합니다.
+- 최종 답변 제출 시 개인정보와 민감정보 포함 여부를 검사합니다.
+- 이메일, 전화번호, 주민등록번호, 카드번호, 비밀번호, API Key, DB 비밀번호로 보이는 값을 감지합니다.
+- 개인정보 또는 민감정보가 감지되면 리포트 생성을 진행하지 않고 프론트에 경고 정보를 반환합니다.
