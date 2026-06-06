@@ -6,11 +6,7 @@ import com.example.trouble_log.domain.ai.dto.RadarScore;
 import com.example.trouble_log.domain.ai.service.AzureOpenAiPromptService;
 import com.example.trouble_log.domain.ai.service.RadarScoreCalculator;
 import com.example.trouble_log.TroubleLogApplication;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
+import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
@@ -20,6 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(classes = TroubleLogApplication.class)
 @ActiveProfiles("test")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@Disabled("Azure OpenAI 키 필요 — 로컬에서만 실행")
 class PromptIntegrationTest {
 
     @Autowired AzureOpenAiPromptService promptService;
