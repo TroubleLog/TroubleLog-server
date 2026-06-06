@@ -38,7 +38,7 @@ public class InterviewService {
     @Transactional
     public AnswerResponse saveAnswer(Long sessionId, Long questionId, AnswerRequest request) {
         // 세션 존재 확인
-        sessionRepository.findById(sessionId)
+        ProjectSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "세션을 찾을 수 없습니다."));
 
@@ -53,6 +53,10 @@ public class InterviewService {
                     HttpStatus.FORBIDDEN, "해당 세션의 질문이 아닙니다.");
         }
 
+        PreContext preContext = preContextRepository.findByProjectSession(session)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "사전 컨텍스트를 찾을 수 없습니다."));
+
         // 스킵 여부 판단
         boolean isSkipped = request.getAnswer() == null || request.getAnswer().isBlank();
 
@@ -63,6 +67,8 @@ public class InterviewService {
         if (!isSkipped) {
             // AI 피드백 생성
             AnswerFeedbackResult feedbackResult = promptService.evaluateAnswer(
+                    session,
+                    preContext,
                     question.getQuestion(),
                     request.getAnswer()
             );
@@ -112,7 +118,7 @@ public class InterviewService {
             qaPairs.append("Q").append(i + 1).append(". ")
                     .append(q.getQuestion()).append("\n");
 
-            if (a == null || a.getIsSkipped()) {
+            if (a == null || a.isSkipped()) {
                 qaPairs.append("A").append(i + 1).append(". (스킵)\n\n");
             } else {
                 qaPairs.append("A").append(i + 1).append(". ")
