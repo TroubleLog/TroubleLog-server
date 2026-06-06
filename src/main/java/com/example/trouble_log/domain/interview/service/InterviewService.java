@@ -20,6 +20,7 @@ import com.example.trouble_log.domain.projectSession.repository.PreContextReposi
 import com.example.trouble_log.domain.projectSession.repository.ProjectSessionRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +28,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -103,18 +105,21 @@ public class InterviewService {
 
     // ── 트러블슈팅 리포트 생성 ────────────────────────────────
     public ReportResponse generateReport(Long sessionId) {
+        // 세션 조회
         ProjectSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "세션을 찾을 수 없습니다."));
 
+        // 사전 컨텍스트 조회
         PreContext preContext = preContextRepository.findByProjectSession(session)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "사전 컨텍스트를 찾을 수 없습니다."));
 
-        // 질문 + 답변 조회 후 qaPairs 조립
+        // 질문 + 답변 조회
         List<InterviewQuestion> questions = questionRepository
                 .findByProjectSessionIdOrderByQuestionSequenceAsc(sessionId);
 
+        // qaPairs 조립
         StringBuilder qaPairs = new StringBuilder();
         for (int i = 0; i < questions.size(); i++) {
             InterviewQuestion q = questions.get(i);
@@ -131,25 +136,35 @@ public class InterviewService {
             }
         }
 
-        // 코드 평가 + 레이더 계산
-        CodeEvaluationResult codeEval = promptService.evaluateCode(
-                session.getCodeContent());
+        // DB에서 feedback 파싱 (AI 재호출 없음)
+        List<AnswerFeedbackResult> feedbackList = questions.stream()
+                .filter(q -> q.getInterviewAnswer() != null
+                        && !q.getInterviewAnswer().isSkipped()
+                        && q.getInterviewAnswer().getFeedback() != null)
+                .map(q -> {
+                    try {
+                        return objectMapper.readValue(
+                                q.getInterviewAnswer().getFeedback(),
+                                AnswerFeedbackResult.class);
+                    } catch (Exception e) {
+                        log.warn("피드백 파싱 실패. questionId={}", q.getId());
+                        return null;
+                    }
+                })
+                .filter(f -> f != null)
+                .toList();
 
-        // 답변 피드백 취합 (첫 번째 답변 기준)
-        AnswerFeedbackResult feedbackForRadar = questions.stream()
-                .filter(q -> q.getInterviewAnswer() != null && !q.getInterviewAnswer().isSkipped())
-                .findFirst()
-                .map(q -> promptService.evaluateAnswer(
-                        q.getQuestion(),
-                        q.getInterviewAnswer().getAnswer()))
-                .orElse(null);
+        // 코드 평가
+        CodeEvaluationResult codeEval = promptService.evaluateCode(session.getCodeContent());
 
+        // 레이더 계산 (전체 답변 평균)
         RadarScore radarScore = null;
-        if (feedbackForRadar != null) {
-            radarScore = radarCalculator.calculate(feedbackForRadar, codeEval);
+        if (!feedbackList.isEmpty()) {
+            AnswerFeedbackResult avgFeedback = averageFeedback(feedbackList);
+            radarScore = radarCalculator.calculate(avgFeedback, codeEval);
         }
 
-        // AI 리포트 생성
+        // 리포트 생성
         String reportMarkdown = promptService.generateReport(
                 session.getCodeContent(),
                 preContext.getCodePurpose(),
@@ -159,12 +174,12 @@ public class InterviewService {
                 qaPairs.toString()
         );
 
-        // 리포트 파싱 (섹션별 분리)
+        // 섹션 파싱
         String background = extractSection(reportMarkdown, "## Background", "## Problem");
-        String problem = extractSection(reportMarkdown, "## Problem", "## Root Cause");
-        String cause = extractSection(reportMarkdown, "## Root Cause", "## Resolution");
-        String solution = extractSection(reportMarkdown, "## Resolution", "## Result");
-        String result = extractSection(reportMarkdown, "## Result", null);
+        String problem    = extractSection(reportMarkdown, "## Problem", "## Root Cause");
+        String cause      = extractSection(reportMarkdown, "## Root Cause", "## Resolution");
+        String solution   = extractSection(reportMarkdown, "## Resolution", "## Result");
+        String result     = extractSection(reportMarkdown, "## Result", null);
 
         // DB 저장
         if (radarScore != null) {
@@ -176,6 +191,28 @@ public class InterviewService {
         }
 
         return new ReportResponse(reportMarkdown, radarScore);
+    }
+
+    // 전체 답변 피드백 평균 계산
+    private AnswerFeedbackResult averageFeedback(List<AnswerFeedbackResult> feedbackList) {
+        int specificity = (int) Math.round(feedbackList.stream()
+                .mapToInt(f -> f.getScores().getSpecificity()).average().orElse(0));
+        int structure = (int) Math.round(feedbackList.stream()
+                .mapToInt(f -> f.getScores().getStructure()).average().orElse(0));
+        int relevance = (int) Math.round(feedbackList.stream()
+                .mapToInt(f -> f.getScores().getRelevance()).average().orElse(0));
+        int keyword = (int) Math.round(feedbackList.stream()
+                .mapToInt(f -> f.getScores().getKeyword()).average().orElse(0));
+
+        AnswerFeedbackResult.Scores avgScores = new AnswerFeedbackResult.Scores();
+        avgScores.setSpecificity(specificity);
+        avgScores.setStructure(structure);
+        avgScores.setRelevance(relevance);
+        avgScores.setKeyword(keyword);
+
+        AnswerFeedbackResult avg = new AnswerFeedbackResult();
+        avg.setScores(avgScores);
+        return avg;
     }
 
     // 섹션 추출 헬퍼
