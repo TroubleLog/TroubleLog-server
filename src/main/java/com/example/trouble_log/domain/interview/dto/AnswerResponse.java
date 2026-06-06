@@ -6,10 +6,10 @@ import lombok.Getter;
 
 @Getter
 @AllArgsConstructor
-@Schema(description = "답변 제출 응답")
+@Schema(description = "현재 답변 AI 피드백 응답")
 public class AnswerResponse {
 
-    @Schema(description = "저장된 답변 ID")
+    @Schema(description = "저장된 답변 ID. 현재 답변 피드백 API에서는 DB에 저장하지 않으므로 null입니다.", nullable = true)
     private Long answerId;
 
     @Schema(description = "AI 피드백 개선 제안 (스킵 시 null)")
