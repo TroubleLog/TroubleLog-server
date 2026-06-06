@@ -1,7 +1,12 @@
 package com.example.trouble_log.domain.interview.service;
 
 import com.example.trouble_log.domain.ai.dto.AnswerFeedbackResult;
+import com.example.trouble_log.domain.ai.dto.CodeEvaluationResult;
+import com.example.trouble_log.domain.ai.dto.RadarScore;
 import com.example.trouble_log.domain.ai.service.AzureOpenAiPromptService;
+import com.example.trouble_log.domain.ai.service.RadarScoreCalculator;
+import com.example.trouble_log.domain.analysis.entity.AnalysisResult;
+import com.example.trouble_log.domain.analysis.repository.AnalysisResultRepository;
 import com.example.trouble_log.domain.interview.dto.AnswerRequest;
 import com.example.trouble_log.domain.interview.dto.AnswerResponse;
 import com.example.trouble_log.domain.interview.dto.ReportResponse;
@@ -33,6 +38,8 @@ public class InterviewService {
     private final PreContextRepository preContextRepository;
     private final AzureOpenAiPromptService promptService;
     private final ObjectMapper objectMapper;
+    private final RadarScoreCalculator radarCalculator;
+    private final AnalysisResultRepository analysisResultRepository;
 
     // ── 답변 저장 + AI 피드백 생성 ───────────────────────────
     @Transactional
@@ -96,12 +103,10 @@ public class InterviewService {
 
     // ── 트러블슈팅 리포트 생성 ────────────────────────────────
     public ReportResponse generateReport(Long sessionId) {
-        // 세션 조회
         ProjectSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "세션을 찾을 수 없습니다."));
 
-        // 사전 컨텍스트 조회
         PreContext preContext = preContextRepository.findByProjectSession(session)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "사전 컨텍스트를 찾을 수 없습니다."));
@@ -126,8 +131,26 @@ public class InterviewService {
             }
         }
 
+        // 코드 평가 + 레이더 계산
+        CodeEvaluationResult codeEval = promptService.evaluateCode(
+                session.getCodeContent());
+
+        // 답변 피드백 취합 (첫 번째 답변 기준)
+        AnswerFeedbackResult feedbackForRadar = questions.stream()
+                .filter(q -> q.getInterviewAnswer() != null && !q.getInterviewAnswer().isSkipped())
+                .findFirst()
+                .map(q -> promptService.evaluateAnswer(
+                        q.getQuestion(),
+                        q.getInterviewAnswer().getAnswer()))
+                .orElse(null);
+
+        RadarScore radarScore = null;
+        if (feedbackForRadar != null) {
+            radarScore = radarCalculator.calculate(feedbackForRadar, codeEval);
+        }
+
         // AI 리포트 생성
-        String report = promptService.generateReport(
+        String reportMarkdown = promptService.generateReport(
                 session.getCodeContent(),
                 preContext.getCodePurpose(),
                 preContext.getTechRationale(),
@@ -136,6 +159,34 @@ public class InterviewService {
                 qaPairs.toString()
         );
 
-        return new ReportResponse(report);
+        // 리포트 파싱 (섹션별 분리)
+        String background = extractSection(reportMarkdown, "## Background", "## Problem");
+        String problem = extractSection(reportMarkdown, "## Problem", "## Root Cause");
+        String cause = extractSection(reportMarkdown, "## Root Cause", "## Resolution");
+        String solution = extractSection(reportMarkdown, "## Resolution", "## Result");
+        String result = extractSection(reportMarkdown, "## Result", null);
+
+        // DB 저장
+        if (radarScore != null) {
+            AnalysisResult analysisResult = new AnalysisResult(
+                    session, radarScore, codeEval,
+                    background, problem, cause, solution, result
+            );
+            analysisResultRepository.save(analysisResult);
+        }
+
+        return new ReportResponse(reportMarkdown, radarScore);
+    }
+
+    // 섹션 추출 헬퍼
+    private String extractSection(String markdown, String startHeader, String endHeader) {
+        int start = markdown.indexOf(startHeader);
+        if (start < 0) return "";
+        start += startHeader.length();
+
+        int end = endHeader != null ? markdown.indexOf(endHeader, start) : markdown.length();
+        if (end < 0) end = markdown.length();
+
+        return markdown.substring(start, end).trim();
     }
 }

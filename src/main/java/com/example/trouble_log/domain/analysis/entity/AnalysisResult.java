@@ -1,5 +1,7 @@
 package com.example.trouble_log.domain.analysis.entity;
 
+import com.example.trouble_log.domain.ai.dto.CodeEvaluationResult;
+import com.example.trouble_log.domain.ai.dto.RadarScore;
 import com.example.trouble_log.domain.projectSession.entity.ProjectSession;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -72,4 +74,31 @@ public class AnalysisResult {
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    // 레이더 차트와 리포트 전체 저장용 생성자
+    public AnalysisResult(ProjectSession projectSession,
+                          RadarScore radarScore,
+                          CodeEvaluationResult codeEval,
+                          String reportBackground,
+                          String reportProblem,
+                          String reportCause,
+                          String reportSolution,
+                          String reportResult) {
+        this.projectSession = projectSession;
+        this.scoreProblemSolving = radarScore.getProblemSolving();
+        this.scoreTechJudgment = radarScore.getTechJudgment();
+        this.scoreCodeReliability = radarScore.getCodeReliability();
+        this.scoreCommunication = radarScore.getCommunication();
+        this.scoreArchitecture = radarScore.getDesignThinking();
+        this.scoreNaming = codeEval.getNaming().getScore();
+        this.scoreSingleResponsibility = codeEval.getSingleResponsibility().getScore();
+        this.scoreErrorHandling = codeEval.getErrorHandling().getScore();
+        this.scoreDuplication = codeEval.getDuplication().getScore();
+        this.scoreCommentQuality = codeEval.getCommentQuality().getScore();
+        this.reportBackground = reportBackground;
+        this.reportProblem = reportProblem;
+        this.reportCause = reportCause;
+        this.reportSolution = reportSolution;
+        this.reportResult = reportResult;
+        this.createdAt = LocalDateTime.now();
+    }
 }
