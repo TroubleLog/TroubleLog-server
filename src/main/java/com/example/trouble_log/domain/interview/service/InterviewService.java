@@ -34,6 +34,9 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class InterviewService {
 
+    private static final String DEFAULT_IMPROVEMENT_MESSAGE =
+            "현재 답변은 질문의 핵심을 잘 짚고 있어요. 이 흐름을 유지하면서 본인이 직접 고민하고 해결한 과정까지 차분히 이어가면 더 설득력 있는 답변이 될 수 있습니다.";
+
     private final InterviewQuestionRepository questionRepository;
     private final InterviewAnswerRepository answerRepository;
     private final ProjectSessionRepository sessionRepository;
@@ -93,7 +96,7 @@ public class InterviewService {
                 feedbackJson = "{}";
             }
 
-            improvement = feedbackResult.getImprovement();
+            improvement = normalizeImprovement(feedbackResult.getImprovement());
             warning = feedbackResult.getWarning();
         }
 
@@ -107,6 +110,12 @@ public class InterviewService {
 
         InterviewAnswer saved = answerRepository.save(interviewAnswer);
         return new AnswerResponse(saved.getId(), improvement, warning);
+    }
+
+    private String normalizeImprovement(String improvement) {
+        return improvement == null || improvement.isBlank()
+                ? DEFAULT_IMPROVEMENT_MESSAGE
+                : improvement;
     }
 
     // ── 트러블슈팅 리포트 생성 ────────────────────────────────
