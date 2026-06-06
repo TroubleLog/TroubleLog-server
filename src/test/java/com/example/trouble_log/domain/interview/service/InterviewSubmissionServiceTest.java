@@ -124,6 +124,35 @@ class InterviewSubmissionServiceTest {
         assertThat(response.getReportGenerationReady()).isTrue();
     }
 
+    @Test
+    void submitUpdatesExistingSkippedAnswerAsAnswered() {
+        ProjectSession projectSession = projectSession();
+        InterviewAnswer existingAnswer = new InterviewAnswer(question(projectSession, 1L, "질문 1", 1), null, true, null);
+        ReflectionTestUtils.setField(existingAnswer, "id", 10L);
+
+        InterviewSubmitRequest request = request(List.of(
+                answerRequest(1L, "최종 답변입니다."),
+                answerRequest(2L, "JPA 변경 감지를 활용했습니다."),
+                answerRequest(3L, "예외는 도메인별로 구분해 처리했습니다.")
+        ));
+        List<InterviewQuestion> questions = List.of(
+                existingAnswer.getInterviewQuestion(),
+                question(projectSession, 2L, "질문 2", 2),
+                question(projectSession, 3L, "질문 3", 3)
+        );
+
+        when(projectSessionRepository.findById(anyLong())).thenReturn(Optional.of(projectSession));
+        when(interviewQuestionRepository.findByProjectSessionIdOrderByQuestionSequenceAsc(anyLong()))
+                .thenReturn(questions);
+        when(interviewAnswerRepository.findByInterviewQuestionId(1L)).thenReturn(Optional.of(existingAnswer));
+
+        InterviewSubmitResponse response = interviewSubmissionService.submit(1L, request);
+
+        assertThat(response.getSubmitted()).isTrue();
+        assertThat(existingAnswer.getAnswer()).isEqualTo("최종 답변입니다.");
+        assertThat(existingAnswer.isSkipped()).isFalse();
+    }
+
     private ProjectSession projectSession() {
         Member member = new Member("user@example.com", "password", "user");
         ReflectionTestUtils.setField(member, "id", 1L);
