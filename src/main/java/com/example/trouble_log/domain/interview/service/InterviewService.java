@@ -66,6 +66,11 @@ public class InterviewService {
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "사전 컨텍스트를 찾을 수 없습니다."));
 
+        if (request == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "답변 요청 본문은 필수입니다.");
+        }
+
         // 스킵 여부 판단
         boolean isSkipped = request.getAnswer() == null || request.getAnswer().isBlank();
 
@@ -92,8 +97,9 @@ public class InterviewService {
             warning = feedbackResult.getWarning();
         }
 
-        InterviewAnswer interviewAnswer = new InterviewAnswer(
-                question,
+        InterviewAnswer interviewAnswer = answerRepository.findByInterviewQuestionId(questionId)
+                .orElseGet(() -> new InterviewAnswer(question, null, true, null));
+        interviewAnswer.update(
                 isSkipped ? null : request.getAnswer(),
                 isSkipped,
                 feedbackJson

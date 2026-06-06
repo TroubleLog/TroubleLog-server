@@ -46,7 +46,13 @@ public class InterviewAnswer {
         this(interviewQuestion, answer, false, null);  // 생성자 2 호출
     }
 
-    public void updateAnswer(String answer) {
+    public void update(String answer, boolean isSkipped, String feedback) {
         this.answer = answer;
+        this.isSkipped = isSkipped;
+        this.feedback = feedback;
+    }
+
+    public void updateAnswer(String answer) {
+        update(answer, answer == null || answer.isBlank(), null);
     }
 }

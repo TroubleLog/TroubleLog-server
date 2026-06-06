@@ -5,6 +5,11 @@ import com.example.trouble_log.domain.interview.dto.AnswerResponse;
 import com.example.trouble_log.domain.interview.dto.ReportResponse;
 import com.example.trouble_log.domain.interview.service.InterviewService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -19,20 +24,46 @@ public class InterviewController {
 
     private final InterviewService interviewService;
 
-    @Operation(summary = "답변 제출", description = "면접 질문에 대한 답변을 저장하고 AI 피드백을 반환합니다.")
+    @Operation(
+            summary = "면접 질문 답변 저장 및 AI 피드백 생성",
+            description = "특정 프로젝트 세션의 면접 질문에 대한 답변을 저장합니다. 답변이 비어 있으면 스킵으로 처리하고, 답변이 있으면 Azure OpenAI 피드백을 생성해 개선 제안과 주의 메시지를 반환합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "답변 저장 성공",
+                    content = @Content(schema = @Schema(implementation = AnswerResponse.class))),
+            @ApiResponse(responseCode = "400", description = "요청 본문 누락"),
+            @ApiResponse(responseCode = "403", description = "해당 세션의 질문이 아님"),
+            @ApiResponse(responseCode = "404", description = "세션, 질문 또는 사전 컨텍스트를 찾을 수 없음")
+    })
     @PostMapping("/{sessionId}/answers/{questionId}")
     public ResponseEntity<AnswerResponse> saveAnswer(
+            @Parameter(description = "프로젝트 세션 ID", example = "1", required = true)
             @PathVariable Long sessionId,
+            @Parameter(description = "답변을 저장할 면접 질문 ID", example = "1", required = true)
             @PathVariable Long questionId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    description = "회원 ID와 답변 내용. 답변이 null 또는 공백이면 스킵으로 저장됩니다.",
+                    required = true,
+                    content = @Content(schema = @Schema(implementation = AnswerRequest.class))
+            )
             @RequestBody AnswerRequest request
     ) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(interviewService.saveAnswer(sessionId, questionId, request));
     }
 
-    @Operation(summary = "리포트 생성", description = "저장된 Q&A를 바탕으로 트러블슈팅 리포트를 생성합니다.")
+    @Operation(
+            summary = "트러블슈팅 리포트 생성",
+            description = "저장된 면접 질문과 답변, 사전 컨텍스트, 코드 평가 결과를 바탕으로 마크다운 리포트와 역량 레이더 점수를 생성합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "리포트 생성 성공",
+                    content = @Content(schema = @Schema(implementation = ReportResponse.class))),
+            @ApiResponse(responseCode = "404", description = "세션 또는 사전 컨텍스트를 찾을 수 없음")
+    })
     @PostMapping("/{sessionId}/report")
     public ResponseEntity<ReportResponse> generateReport(
+            @Parameter(description = "프로젝트 세션 ID", example = "1", required = true)
             @PathVariable Long sessionId
     ) {
         return ResponseEntity.ok(interviewService.generateReport(sessionId));
