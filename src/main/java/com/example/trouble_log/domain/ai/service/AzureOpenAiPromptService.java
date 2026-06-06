@@ -30,6 +30,9 @@ public class AzureOpenAiPromptService {
     private static final String ANSWER_FEEDBACK_USER_PROMPT_PATH   = "prompts/answer-feedback-user.txt";
     private static final String CODE_EVALUATION_SYSTEM_PROMPT_PATH = "prompts/code-evaluation-system.txt";
     private static final String CODE_EVALUATION_USER_PROMPT_PATH   = "prompts/code-evaluation-user.txt";
+    private static final String REPORT_SYSTEM_PROMPT_PATH = "prompts/report-system.txt";
+    private static final String REPORT_USER_PROMPT_PATH   = "prompts/report-user.txt";
+
 
     // 시스템 프롬프트와 사용자 프롬프트를 기반으로 Azure OpenAI에 요청을 보내고 원문 응답을 반환한다.
     public String generate(String systemPrompt, String userPrompt) {
@@ -223,6 +226,24 @@ public class AzureOpenAiPromptService {
         return parseAnswerFeedbackResponse(response);
     }
 
+    // 테스트 및 단순 호출용 오버로딩 메서드
+    public AnswerFeedbackResult evaluateAnswer(String question, String answer) {
+        if (isBlank(question) || isBlank(answer)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "질문과 답변은 필수입니다.");
+        }
+
+        String userPrompt = loadPromptTemplate(ANSWER_FEEDBACK_USER_PROMPT_PATH)
+                .replace("{question}", question)
+                .replace("{answer}", answer);
+
+        String response = generate(
+                loadPromptTemplate(ANSWER_FEEDBACK_SYSTEM_PROMPT_PATH),
+                userPrompt
+        );
+
+        return parseAnswerFeedbackResponse(response);
+    }
+
     // 답변 피드백 생성에 필요한 프로젝트 세션, 사전 컨텍스트, 질문, 답변이 모두 준비되었는지 검증한다.
     private void validateAnswerFeedbackSource(
             ProjectSession projectSession,
@@ -307,6 +328,26 @@ public class AzureOpenAiPromptService {
         } catch (JsonProcessingException e) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "코드 평가 응답을 해석하지 못했습니다.", e);
         }
+    }
+
+    
+    // 리포트 작성
+    public String generateReport(
+            String codeContent, String codePurpose, String techRationale,
+            String exceptionHandling, String projectScale, String qaPairs) {
+
+        String userPrompt = loadPromptTemplate(REPORT_USER_PROMPT_PATH)
+                .replace("{codeContent}", codeContent)
+                .replace("{codePurpose}", codePurpose)
+                .replace("{techRationale}", techRationale)
+                .replace("{exceptionHandling}", exceptionHandling)
+                .replace("{projectScale}", projectScale)
+                .replace("{qaPairs}", qaPairs);
+
+        return generate(
+                loadPromptTemplate(REPORT_SYSTEM_PROMPT_PATH),
+                userPrompt
+        );
     }
 
     //JSON 객체 추출 헬퍼
