@@ -104,6 +104,7 @@ public class InterviewService {
     }
 
     // ── 트러블슈팅 리포트 생성 ────────────────────────────────
+    @Transactional
     public ReportResponse generateReport(Long sessionId) {
         // 세션 조회
         ProjectSession session = sessionRepository.findById(sessionId)
