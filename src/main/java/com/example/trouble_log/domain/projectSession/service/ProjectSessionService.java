@@ -3,8 +3,11 @@ package com.example.trouble_log.domain.projectSession.service;
 import com.example.trouble_log.domain.ai.service.AzureOpenAiPromptService;
 import com.example.trouble_log.domain.audit.service.AuditLogService;
 import com.example.trouble_log.domain.interview.dto.InterviewQuestionResponse;
+import com.example.trouble_log.domain.interview.dto.PersonalInfoWarning;
 import com.example.trouble_log.domain.interview.entity.InterviewQuestion;
+import com.example.trouble_log.domain.interview.exception.PersonalInfoDetectedException;
 import com.example.trouble_log.domain.interview.repository.InterviewQuestionRepository;
+import com.example.trouble_log.domain.interview.service.PersonalInfoDetectionService;
 import com.example.trouble_log.domain.projectSession.dto.PreContextRequest;
 import com.example.trouble_log.domain.projectSession.dto.PreContextResponse;
 import com.example.trouble_log.domain.projectSession.dto.ProjectSessionRequest;
@@ -37,12 +40,14 @@ public class ProjectSessionService {
     private final InterviewQuestionRepository interviewQuestionRepository;
     private final AzureOpenAiPromptService azureOpenAiPromptService;
     private final AuditLogService auditLogService;
+    private final PersonalInfoDetectionService personalInfoDetectionService;
 
     @Transactional
     // 회원의 코드와 GitHub URL을 기반으로 새 프로젝트 세션을 생성한다.
     public ProjectSessionResponse create(ProjectSessionRequest request) {
         validateRequestBody(request);
         validateRequiredFields("회원 ID와 소스코드는 필수입니다.", request.getMemberId(), request.getCodeContent());
+        validateCodeContentDoesNotContainPersonalInfo(request);
 
         Member member = memberRepository.findById(request.getMemberId())
                 .orElseThrow(() -> {
@@ -73,6 +78,22 @@ public class ProjectSessionService {
         ));
 
         return new ProjectSessionResponse(savedProjectSession.getId());
+    }
+
+    private void validateCodeContentDoesNotContainPersonalInfo(ProjectSessionRequest request) {
+        List<PersonalInfoWarning> warnings = personalInfoDetectionService.detect(request.getCodeContent());
+        if (warnings.isEmpty()) {
+            return;
+        }
+
+        auditLogService.recordFailure(
+                request.getMemberId(),
+                null,
+                "PROJECT_SESSION_CREATE",
+                buildProjectSessionRequestSummary(request),
+                "개인정보 감지: " + warnings.stream().map(PersonalInfoWarning::getType).toList()
+        );
+        throw new PersonalInfoDetectedException(warnings);
     }
 
     @Transactional

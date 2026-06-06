@@ -107,6 +107,27 @@ class InterviewServiceTest {
         );
     }
 
+    @Test
+    void saveAnswerReturnsDefaultImprovementWhenAiImprovementIsBlank() {
+        AnswerFeedbackResult feedbackResult = new AnswerFeedbackResult();
+        feedbackResult.setImprovement("   ");
+        when(promptService.evaluateAnswer(any(ProjectSession.class), any(PreContext.class), any(), any()))
+                .thenReturn(feedbackResult);
+
+        InterviewAnswer existingAnswer = new InterviewAnswer(question(), null, true, null);
+        ReflectionTestUtils.setField(existingAnswer, "id", 10L);
+        when(answerRepository.findByInterviewQuestionId(1L)).thenReturn(Optional.of(existingAnswer));
+
+        AnswerRequest request = new AnswerRequest();
+        request.setAnswer("좋은 답변입니다.");
+
+        AnswerResponse response = interviewService.saveAnswer(1L, 1L, request);
+
+        assertThat(response.getImprovement()).isEqualTo(
+                "현재 답변은 질문의 핵심을 잘 짚고 있어요. 이 흐름을 유지하면서 본인이 직접 고민하고 해결한 과정까지 차분히 이어가면 더 설득력 있는 답변이 될 수 있습니다."
+        );
+    }
+
     private ProjectSession projectSession() {
         Member member = new Member("user@example.com", "password", "user");
         ReflectionTestUtils.setField(member, "id", 1L);

@@ -1,5 +1,6 @@
 package com.example.trouble_log.domain.projectSession.controller;
 
+import com.example.trouble_log.domain.interview.dto.PersonalInfoDetectionResponse;
 import com.example.trouble_log.domain.projectSession.dto.PreContextRequest;
 import com.example.trouble_log.domain.projectSession.dto.PreContextResponse;
 import com.example.trouble_log.domain.projectSession.dto.ProjectSessionRequest;
@@ -31,12 +32,13 @@ public class ProjectSessionController {
 
     @Operation(
             summary = "프로젝트 세션 생성",
-            description = "회원이 입력한 소스코드와 선택적인 GitHub URL을 저장하고, 이후 사전 컨텍스트와 면접 질문 생성에 사용할 세션 ID를 반환합니다."
+            description = "회원이 입력한 소스코드에서 개인정보와 민감정보를 먼저 감지합니다. 문제가 없으면 소스코드와 선택적인 GitHub URL을 저장하고, 이후 사전 컨텍스트와 면접 질문 생성에 사용할 세션 ID를 반환합니다."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "프로젝트 세션 생성 성공",
                     content = @Content(schema = @Schema(implementation = ProjectSessionResponse.class))),
-            @ApiResponse(responseCode = "400", description = "회원 ID 또는 소스코드 누락"),
+            @ApiResponse(responseCode = "400", description = "회원 ID 또는 소스코드 누락, 개인정보 또는 민감정보 감지",
+                    content = @Content(schema = @Schema(implementation = PersonalInfoDetectionResponse.class))),
             @ApiResponse(responseCode = "404", description = "회원을 찾을 수 없음")
     })
     @PostMapping()

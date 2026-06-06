@@ -1,7 +1,6 @@
 package com.example.trouble_log.domain.interview.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
@@ -13,7 +12,6 @@ import com.example.trouble_log.domain.interview.dto.InterviewSubmitRequest;
 import com.example.trouble_log.domain.interview.dto.InterviewSubmitResponse;
 import com.example.trouble_log.domain.interview.entity.InterviewAnswer;
 import com.example.trouble_log.domain.interview.entity.InterviewQuestion;
-import com.example.trouble_log.domain.interview.exception.PersonalInfoDetectedException;
 import com.example.trouble_log.domain.interview.repository.InterviewAnswerRepository;
 import com.example.trouble_log.domain.interview.repository.InterviewQuestionRepository;
 import com.example.trouble_log.domain.projectSession.entity.ProjectSession;
@@ -41,7 +39,6 @@ class InterviewSubmissionServiceTest {
                 projectSessionRepository,
                 interviewQuestionRepository,
                 interviewAnswerRepository,
-                new PersonalInfoDetectionService(),
                 mock(AuditLogService.class)
         );
 
@@ -50,7 +47,7 @@ class InterviewSubmissionServiceTest {
     }
 
     @Test
-    void submitBlocksWhenAnswerContainsPersonalInfo() {
+    void submitDoesNotBlockWhenAnswerContainsPersonalInfo() {
         ProjectSession projectSession = projectSession();
         InterviewSubmitRequest request = request(List.of(
                 answerRequest(1L, "제 이메일은 test@example.com 입니다."),
@@ -67,11 +64,10 @@ class InterviewSubmissionServiceTest {
         when(interviewQuestionRepository.findByProjectSessionIdOrderByQuestionSequenceAsc(anyLong()))
                 .thenReturn(questions);
 
-        assertThatThrownBy(() -> interviewSubmissionService.submit(1L, request))
-                .isInstanceOf(PersonalInfoDetectedException.class)
-                .satisfies(e -> assertThat(((PersonalInfoDetectedException) e).getWarnings())
-                        .extracting("type")
-                        .containsExactly(com.example.trouble_log.domain.interview.type.PersonalInfoType.EMAIL));
+        InterviewSubmitResponse response = interviewSubmissionService.submit(1L, request);
+
+        assertThat(response.getSubmitted()).isTrue();
+        assertThat(response.getReportGenerationReady()).isTrue();
     }
 
     @Test
