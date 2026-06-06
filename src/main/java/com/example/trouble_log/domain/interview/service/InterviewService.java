@@ -147,13 +147,13 @@ public class InterviewService {
                                 q.getInterviewAnswer().getFeedback(),
                                 AnswerFeedbackResult.class);
                         // [추가] scores null 체크
-                        if (result == null || result.getScores() == null) {
+                        if (result.getScores() == null) {
                             log.warn("피드백 scores 없음. questionId={}", q.getId());
                             return null;
                         }
                         return result;
                     } catch (Exception e) {
-                        log.warn("피드백 파싱 실패. questionId={}", q.getId());
+                        log.warn("피드백 파싱 실패. questionId={}", q.getId(), e);
                         return null;
                     }
                 })
@@ -210,13 +210,13 @@ public class InterviewService {
 
         if (validList.isEmpty()) return null;
 
-        int specificity = (int) Math.round(feedbackList.stream()
+        int specificity = (int) Math.round(validList.stream()
                 .mapToInt(f -> f.getScores().getSpecificity()).average().orElse(0));
-        int structure = (int) Math.round(feedbackList.stream()
+        int structure = (int) Math.round(validList.stream()
                 .mapToInt(f -> f.getScores().getStructure()).average().orElse(0));
-        int relevance = (int) Math.round(feedbackList.stream()
+        int relevance = (int) Math.round(validList.stream()
                 .mapToInt(f -> f.getScores().getRelevance()).average().orElse(0));
-        int keyword = (int) Math.round(feedbackList.stream()
+        int keyword = (int) Math.round(validList.stream()
                 .mapToInt(f -> f.getScores().getKeyword()).average().orElse(0));
 
         AnswerFeedbackResult.Scores avgScores = new AnswerFeedbackResult.Scores();
