@@ -25,11 +25,11 @@ public class InterviewController {
     private final InterviewService interviewService;
 
     @Operation(
-            summary = "면접 질문 답변 저장 및 AI 피드백 생성",
-            description = "특정 프로젝트 세션의 면접 질문에 대한 답변을 저장합니다. 답변이 비어 있으면 스킵으로 처리하고, 답변이 있으면 Azure OpenAI 피드백을 생성해 개선 제안과 주의 메시지를 반환합니다."
+            summary = "현재 답변 AI 피드백 생성",
+            description = "특정 프로젝트 세션의 면접 질문에 대해 현재 작성 중인 답변을 저장하지 않고 AI 피드백만 생성합니다. 최종 저장은 면접 답변 최종 제출 API에서 수행합니다."
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "201", description = "답변 저장 성공",
+            @ApiResponse(responseCode = "201", description = "AI 피드백 생성 성공",
                     content = @Content(schema = @Schema(implementation = AnswerResponse.class))),
             @ApiResponse(responseCode = "400", description = "요청 본문 누락"),
             @ApiResponse(responseCode = "403", description = "해당 세션의 질문이 아님"),
@@ -42,7 +42,7 @@ public class InterviewController {
             @Parameter(description = "답변을 저장할 면접 질문 ID", example = "1", required = true)
             @PathVariable Long questionId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                    description = "회원 ID와 답변 내용. 답변이 null 또는 공백이면 스킵으로 저장됩니다.",
+                    description = "회원 ID와 현재 작성 중인 답변 내용. 답변이 null 또는 공백이면 AI 피드백 없이 null 값을 반환합니다.",
                     required = true,
                     content = @Content(schema = @Schema(implementation = AnswerRequest.class))
             )

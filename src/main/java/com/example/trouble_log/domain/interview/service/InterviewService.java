@@ -12,15 +12,12 @@ import com.example.trouble_log.domain.interview.dto.AnswerResponse;
 import com.example.trouble_log.domain.interview.dto.ReportResponse;
 import com.example.trouble_log.domain.interview.entity.InterviewAnswer;
 import com.example.trouble_log.domain.interview.entity.InterviewQuestion;
-import com.example.trouble_log.domain.interview.repository.InterviewAnswerRepository;
 import com.example.trouble_log.domain.interview.repository.InterviewQuestionRepository;
 import com.example.trouble_log.domain.projectSession.entity.PreContext;
 import com.example.trouble_log.domain.projectSession.entity.ProjectSession;
 import com.example.trouble_log.domain.projectSession.repository.PreContextRepository;
 import com.example.trouble_log.domain.projectSession.repository.ProjectSessionRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,7 +25,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -38,15 +34,13 @@ public class InterviewService {
             "현재 답변은 질문의 핵심을 잘 짚고 있어요. 이 흐름을 유지하면서 본인이 직접 고민하고 해결한 과정까지 차분히 이어가면 더 설득력 있는 답변이 될 수 있습니다.";
 
     private final InterviewQuestionRepository questionRepository;
-    private final InterviewAnswerRepository answerRepository;
     private final ProjectSessionRepository sessionRepository;
     private final PreContextRepository preContextRepository;
     private final AzureOpenAiPromptService promptService;
-    private final ObjectMapper objectMapper;
     private final RadarScoreCalculator radarCalculator;
     private final AnalysisResultRepository analysisResultRepository;
 
-    // ── 답변 저장 + AI 피드백 생성 ───────────────────────────
+    // ── 현재 답변에 대한 AI 피드백 생성 ───────────────────────
     @Transactional
     public AnswerResponse saveAnswer(Long sessionId, Long questionId, AnswerRequest request) {
         // 세션 존재 확인
@@ -77,7 +71,6 @@ public class InterviewService {
         // 스킵 여부 판단
         boolean isSkipped = request.getAnswer() == null || request.getAnswer().isBlank();
 
-        String feedbackJson = null;
         String improvement = null;
         String warning = null;
 
@@ -90,26 +83,11 @@ public class InterviewService {
                     request.getAnswer()
             );
 
-            try {
-                feedbackJson = objectMapper.writeValueAsString(feedbackResult);
-            } catch (Exception e) {
-                feedbackJson = "{}";
-            }
-
             improvement = normalizeImprovement(feedbackResult.getImprovement());
             warning = feedbackResult.getWarning();
         }
 
-        InterviewAnswer interviewAnswer = answerRepository.findByInterviewQuestionId(questionId)
-                .orElseGet(() -> new InterviewAnswer(question, null, true, null));
-        interviewAnswer.update(
-                isSkipped ? null : request.getAnswer(),
-                isSkipped,
-                feedbackJson
-        );
-
-        InterviewAnswer saved = answerRepository.save(interviewAnswer);
-        return new AnswerResponse(saved.getId(), improvement, warning);
+        return new AnswerResponse(null, improvement, warning);
     }
 
     private String normalizeImprovement(String improvement) {
@@ -152,28 +130,19 @@ public class InterviewService {
             }
         }
 
-        // DB에서 feedback 파싱 (AI 재호출 없음)
+        // 최종 제출된 답변 기준으로 피드백 생성
         List<AnswerFeedbackResult> feedbackList = questions.stream()
                 .filter(q -> q.getInterviewAnswer() != null
                         && !q.getInterviewAnswer().isSkipped()
-                        && q.getInterviewAnswer().getFeedback() != null)
-                .map(q -> {
-                    try {
-                        AnswerFeedbackResult result = objectMapper.readValue(
-                                q.getInterviewAnswer().getFeedback(),
-                                AnswerFeedbackResult.class);
-                        // [추가] scores null 체크
-                        if (result.getScores() == null) {
-                            log.warn("피드백 scores 없음. questionId={}", q.getId());
-                            return null;
-                        }
-                        return result;
-                    } catch (Exception e) {
-                        log.warn("피드백 파싱 실패. questionId={}", q.getId(), e);
-                        return null;
-                    }
-                })
-                .filter(f -> f != null)
+                        && q.getInterviewAnswer().getAnswer() != null
+                        && !q.getInterviewAnswer().getAnswer().isBlank())
+                .map(q -> promptService.evaluateAnswer(
+                        session,
+                        preContext,
+                        q.getQuestion(),
+                        q.getInterviewAnswer().getAnswer()
+                ))
+                .filter(feedback -> feedback != null && feedback.getScores() != null)
                 .toList();
 
         // 코드 평가
